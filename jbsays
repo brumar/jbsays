@@ -14,7 +14,7 @@ DRASTIC_CHANGE_THRESHOLD=0.1 # Threshold below which drastic changes should be m
 # --- Helper Functions ---
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"; }
 usage() {
-    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--meta-work-ratio <float>] [requirements_string_or_path_or_-]"
+    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--meta-work-ratio <float>] [--force] [requirements_string_or_path_or_-]"
     echo ""
     echo "Options:"
     echo "  --project-path <path>         : Path to the project directory on the host."
@@ -32,6 +32,7 @@ usage() {
     echo "  --show-final-prompt      : (Optional) Show the final prompt and exit without running Claude."
     echo "  --meta-work-ratio <float>: (Optional) Set the threshold ratio for work vs meta-work (default: ${META_WORK_RATIO}).
   --drastic-change-threshold <float>: (Optional) Set the threshold for triggering drastic project changes (default: ${DRASTIC_CHANGE_THRESHOLD})."
+    echo "  --force                  : (Optional) Force creation if the project directory exists but doesn't contain a .jbsays folder."
     # ... (rest of usage example) ...
     exit 1
 }
@@ -60,6 +61,7 @@ VERBOSE_MODE=false
 ITERATIONS=1 # Default to single iteration
 SHOW_FINAL_PROMPT=false
 USER_DRASTIC_CHANGE_THRESHOLD=""  # User can override the default
+FORCE_MODE=false # Whether to force creation if project exists
 
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -81,6 +83,7 @@ while [[ $# -gt 0 ]]; do
         --nofallback) FALLBACK_TO_INTERACTIVE=false; shift 1 ;;
         --init) INIT_MODE=true; ENTER_MODE=true; shift 1 ;;
         --show-final-prompt) SHOW_FINAL_PROMPT=true; shift 1 ;;
+        --force) FORCE_MODE=true; shift 1 ;;
         --meta-work-ratio) 
             if [[ "$2" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
                 META_WORK_RATIO="$2"
@@ -103,6 +106,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$PROJECT_DIR_HOST" ]; then log "Error: --project-path is mandatory."; usage; fi
+
+# Check if the project directory already exists
+if [ -d "$PROJECT_DIR_HOST" ]; then
+    # If .jbsays exists, it's safe to proceed without force flag
+    if [ -d "$PROJECT_DIR_HOST/.jbsays" ]; then
+        log "Project at '$PROJECT_DIR_HOST' already exists and contains a .jbsays folder. Proceeding with existing project."
+    # If directory exists but doesn't contain .jbsays file, require force flag
+    elif ! $FORCE_MODE; then
+        log "Error: Directory at '$PROJECT_DIR_HOST' already exists but doesn't contain a .jbsays folder."
+        log "Use '--force' to override if you want to use this directory for a new project."
+        exit 1
+    fi
+fi
+
 PROJECT_DIR_HOST=$(mkdir -p "$PROJECT_DIR_HOST" && realpath "$PROJECT_DIR_HOST")
 
 PROJECT_DOT_JBSAYS_DIR="${PROJECT_DIR_HOST}/.jbsays"
