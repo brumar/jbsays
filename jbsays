@@ -10,11 +10,12 @@ FALLBACK_TO_INTERACTIVE=true # Whether to fallback to interactive mode on agent 
 INIT_MODE=false # Whether to require double-enter in interactive mode
 META_WORK_RATIO=0.75 # Default ratio for work vs meta work threshold
 DRASTIC_CHANGE_THRESHOLD=0.1 # Threshold below which drastic changes should be made to the project
+NO_GIT=false # Whether to skip git initialization
 
 # --- Helper Functions ---
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"; }
 usage() {
-    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--meta-work-ratio <float>] [--force] [requirements_string_or_path_or_-]"
+    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--meta-work-ratio <float>] [--force] [--no-git] [requirements_string_or_path_or_-]"
     echo ""
     echo "Options:"
     echo "  --project-path <path>         : Path to the project directory on the host."
@@ -24,6 +25,9 @@ usage() {
     echo "  --max-turns-by-iteration <N> : (Optional) Max turns for Claude agent per iteration. Default is 3. Ignored if --enter."
     echo "  --enter                  : (Optional) Enter interactive mode with Claude within the container."
     echo "                             Ignores requirements, prompt, and max-turns."
+    echo "  --enter-and-bypass       : (Optional) Enter interactive mode with Claude within the container"
+    echo "                             with bypass permissions mode enabled. Ignores requirements,"
+    echo "                             prompt, and max-turns."
     echo "  --verbose                : (Optional) Display the prompt being used before execution."
     echo "  --iterations <N>         : (Optional) Number of iterations to run the command. Use 0 for infinite iterations (Ctrl+C to stop)."
     echo "  --nofallback             : (Optional) Disable fallback to interactive mode if agent mode fails."
@@ -33,6 +37,7 @@ usage() {
     echo "  --meta-work-ratio <float>: (Optional) Set the threshold ratio for work vs meta-work (default: ${META_WORK_RATIO}).
   --drastic-change-threshold <float>: (Optional) Set the threshold for triggering drastic project changes (default: ${DRASTIC_CHANGE_THRESHOLD})."
     echo "  --force                  : (Optional) Force creation if the project directory exists but doesn't contain a .jbsays folder."
+    echo "  --no-git                 : (Optional) Skip git initialization even if no .git directory exists."
     # ... (rest of usage example) ...
     exit 1
 }
@@ -56,6 +61,7 @@ CUSTOM_PROMPT_FILE_HOST=""
 PROJECT_VISION_CONTENT=""
 REQUIREMENTS_CONTENT=""
 ENTER_MODE=false
+ENTER_BYPASS_MODE=false
 MAX_TURNS=10 # Default max turns
 VERBOSE_MODE=false
 ITERATIONS=1 # Default to single iteration
@@ -78,12 +84,14 @@ while [[ $# -gt 0 ]]; do
             shift 2 ;;
         --max-turns-by-iteration) MAX_TURNS="$2"; shift 2 ;;
         --enter) ENTER_MODE=true; shift 1 ;;
+        --enter-and-bypass) ENTER_MODE=true; ENTER_BYPASS_MODE=true; shift 1 ;;
         --verbose) VERBOSE_MODE=true; shift 1 ;;
         --iterations) ITERATIONS="$2"; shift 2 ;;
         --nofallback) FALLBACK_TO_INTERACTIVE=false; shift 1 ;;
         --init) INIT_MODE=true; ENTER_MODE=true; shift 1 ;;
         --show-final-prompt) SHOW_FINAL_PROMPT=true; shift 1 ;;
         --force) FORCE_MODE=true; shift 1 ;;
+        --no-git) NO_GIT=true; shift 1 ;;
         --meta-work-ratio) 
             if [[ "$2" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
                 META_WORK_RATIO="$2"
@@ -129,15 +137,19 @@ PROJECT_JBSAYS_LOGS_DIR="${PROJECT_DOT_JBSAYS_DIR}/logs"
 mkdir -p "$PROJECT_JBSAYS_CONFIG_DIR" "$PROJECT_JBSAYS_LOGS_DIR"
 touch "$PROJECT_JBSAYS_CONFIG_FILE"
 
-# Ensure .jbsays is in the project's .gitignore
-GITIGNORE_FILE="${PROJECT_DIR_HOST}/.gitignore"
-if [ ! -f "$GITIGNORE_FILE" ]; then
-    log "Creating .gitignore file in project directory"
-    echo "# JBSays temporary files" > "$GITIGNORE_FILE"
-    echo ".jbsays/" >> "$GITIGNORE_FILE"
-elif ! grep -q "^\.jbsays/\?$" "$GITIGNORE_FILE"; then
-    log "Adding .jbsays to existing .gitignore"
-    echo -e "\n# JBSays temporary files\n.jbsays/" >> "$GITIGNORE_FILE"
+# Git initialization will only happen during init mode
+
+# Ensure .jbsays is in the project's .gitignore (only if not in no-git mode or if .git exists)
+if (! $NO_GIT || [ -d "${PROJECT_DIR_HOST}/.git" ]); then
+    GITIGNORE_FILE="${PROJECT_DIR_HOST}/.gitignore"
+    if [ ! -f "$GITIGNORE_FILE" ]; then
+        log "Creating .gitignore file in project directory"
+        echo "# JBSays temporary files" > "$GITIGNORE_FILE"
+        echo ".jbsays/" >> "$GITIGNORE_FILE"
+    elif ! grep -q "^\.jbsays/\?$" "$GITIGNORE_FILE"; then
+        log "Adding .jbsays to existing .gitignore"
+        echo -e "\n# JBSays temporary files\n.jbsays/" >> "$GITIGNORE_FILE"
+    fi
 fi
 
 FULL_PROMPT_FOR_CLAUDE=""
@@ -221,8 +233,13 @@ AGENT_ENV_VARS=()
 DOCKER_CMD_OVERRIDE=() # This will hold the command and its arguments for `docker run`
 
 if $ENTER_MODE; then
-    log "Entering interactive mode. Docker image default CMD 'claude' will be used."
-    # No DOCKER_CMD_OVERRIDE needed; Dockerfile's CMD ["claude"] will run.
+    if $ENTER_BYPASS_MODE; then
+        log "Entering interactive mode with bypass permissions. Docker image default CMD 'claude' will be used."
+        DOCKER_CMD_OVERRIDE+=("claude" "--dangerously-skip-permissions")
+    else
+        log "Entering interactive mode. Docker image default CMD 'claude' will be used."
+        DOCKER_CMD_OVERRIDE+=("claude")
+    fi
 else # Agent mode
     log "Agent mode (max turns: $MAX_TURNS): Overriding Docker CMD to run Claude with generated prompt."
 
@@ -315,6 +332,13 @@ if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
         if ! $ENTER_MODE; then
             FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
             DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions" "--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS" "-p" "$FULL_PROMPT_FOR_CLAUDE")
+        else
+            # Reset command for enter mode
+            if $ENTER_BYPASS_MODE; then
+                DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions")
+            else
+                DOCKER_CMD_OVERRIDE=("claude")
+            fi
         fi
         
         LOOP_COUNT=$((LOOP_COUNT + 1))
@@ -337,14 +361,26 @@ else
         
         # Reset environment for interactive mode
         ENTER_MODE=true
+        ENTER_BYPASS_MODE=false  # Do not use bypass mode in fallback
         DOCKER_CMD_OVERRIDE=()  # Clear the command override
         
         # Execute in interactive mode
         execute_docker
     fi
     
-    # If in init mode, run interactive mode a second time
+    # If in init mode, initialize git and run interactive mode a second time
     if $INIT_MODE; then
+        # Initialize git repository if needed and not in no-git mode
+        if ! $NO_GIT && [ ! -d "${PROJECT_DIR_HOST}/.git" ]; then
+            log "No .git directory found. Attempting to initialize git repository..."
+            if ! git -C "${PROJECT_DIR_HOST}" init > /dev/null 2>&1; then
+                log "ERROR: Failed to initialize git repository. Git might not be installed or accessible."
+                log "To skip git initialization, use the --no-git flag."
+            else
+                log "Git repository initialized successfully."
+            fi
+        fi
+        
         log "Init mode: running interactive mode a second time..."
         execute_docker
     fi

@@ -67,7 +67,7 @@ docker build -t jbsays:latest .
 ## Usage
 
 ```bash
-./jbsays --project-path <path_to_project_dir> [--magicprompt <path>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init]
+./jbsays --project-path <path_to_project_dir> [--magicprompt <path>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--no-git]
 ```
 
 ### Required Arguments
@@ -85,6 +85,7 @@ docker build -t jbsays:latest .
 - `--verbose`: Display the prompt being used before execution
 - `--iterations <N>`: Number of iterations to run the command (use 0 for infinite iterations, Ctrl+C to stop)
 - `--nofallback`: Disable fallback to interactive mode if agent mode fails
+- `--no-git`: Skip git initialization even if no `.git` directory exists
 
 ### Examples
 
@@ -310,8 +311,11 @@ You **MUST** run `./jbsays --project-path /path/to/project --init` for each new 
 1. Authorizes Claude Code to run with the `--dangerously-skip-permissions` flag
 2. Generates credentials based on your Claude.ai account
 3. Sets up the project environment properly
+4. Initializes a git repository if one doesn't exist (use `--no-git` to skip this)
 
 Without initialization, the tool will not work correctly.
+
+If git initialization fails during init, an error message will suggest using the `--no-git` flag.
 
 ## Security Considerations
 
