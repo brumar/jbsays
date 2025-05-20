@@ -3,7 +3,10 @@
 Run Claude Code in a loop to achieve your project vision.
 
 ```bash
-./jbsays --project-path /path/to/your/project --project-vision "Create a TypeScript finite state machine library that enables defining state transitions with type safety, supports hierarchical states, allows attaching side effects to transitions, provides visualization capabilities, includes comprehensive documentation with examples, and has 100% test coverage including edge cases" --max-turns-by-iteration 15 --iterations 20
+./jbsays --project-path /path/to/your/project \
+--project-vision "Create a TypeScript finite state machine library that enables defining state transitions with type safety, supports hierarchical states, allows attaching side effects to transitions, provides visualization capabilities, includes comprehensive documentation with examples, and has 100% test coverage including edge cases" \
+--max-turns-by-iteration 15 \
+--iterations 20 \
 ```
 
 This project has two aspects:
