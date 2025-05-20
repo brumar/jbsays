@@ -33,6 +33,8 @@ JBSays runs claude code in a loop, with --dangerously-skip-permissions on, and -
 - Claude Code has web search capabilities that could expose you to external content
 - Network access is available within the container
 - Docker containers are probably not perfect security boundaries
+- While the default prompt asks Claude to commit systematically, empirically it does not always occur automatically
+- Users are strongly advised to work on fresh new projects or create backups before starting, as significant changes may be made to the codebase
 
 ## Quick Start
 
@@ -76,7 +78,7 @@ docker build -t jbsays:latest .
 
 - `--magicprompt <path>`: Path to a custom prompt.md template (defaults to default_prompt.md)
 - `--project-vision <string_or_path>`: Project vision information as string or path to a text file
-- `--max-turns-by-iteration <N>`: Maximum turns for Claude agent per iteration (default: 3, ignored in interactive mode)
+- `--max-turns-by-iteration <N>`: Maximum turns for Claude agent per iteration (default: 15, ignored in interactive mode)
 - `--enter`: Enter interactive mode with Claude
 - `--verbose`: Display the prompt being used before execution
 - `--iterations <N>`: Number of iterations to run the command (use 0 for infinite iterations, Ctrl+C to stop)
@@ -168,7 +170,7 @@ JBSays takes an unconventional approach to AI-assisted development:
 
 - **Influence Before Territory**: Like in the game of Go, focus first on building influence (high-level organization) and let territory (specific implementation) emerge naturally.
 
-- **Minimal Constraints**: Limited turns per session and freedom within a sandboxed environment allow for more organic development.
+- **Minimal Constraints**: Limited turns per session (default max is now 15) and freedom within a sandboxed environment allow for more organic development.
 
 For more details on this approach, see [philosophy.md](philosophy.md).
 
@@ -197,9 +199,9 @@ For more details on this approach, see [philosophy.md](philosophy.md).
 │  │   ┌─────────────────────────────────────────────────────────┐  │    │
 │  │   │                                                         │  │    │
 │  │   │  Claude Code Agent                                      │  │    │
-│  │   │  (Limited to max-turns: 3 by default)                   │  │    │
+│  │   │  (Limited to max-turns: 15 by default)                  │  │    │
 │  │   │                                                         │  │    │
-│  │   │                      Turn 1 → Turn 2 → Turn 3           │  │    │
+│  │   │                Turn 1 → Turn 2 → ... → Turn 15          │  │    │
 │  │   │                                                         │  │    │
 │  │   │                           │                             │  │    │
 │  │   │                           ▼                             │  │    │
