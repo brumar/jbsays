@@ -1,0 +1,336 @@
+#!/bin/bash
+set -euo pipefail
+
+# --- Configuration ---
+DOCKER_IMAGE_NAME="jbsays"
+DOCKER_IMAGE_TAG="latest"
+DOCKER_FULL_IMAGE="${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+DEFAULT_PROMPT_FILENAME="default_prompt.md" # Relative to this script's location
+FALLBACK_TO_INTERACTIVE=true # Whether to fallback to interactive mode on agent failure
+INIT_MODE=false # Whether to require double-enter in interactive mode
+META_WORK_RATIO=0.75 # Default ratio for work vs meta work threshold
+DRASTIC_CHANGE_THRESHOLD=0.1 # Threshold below which drastic changes should be made to the project
+
+# --- Helper Functions ---
+log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"; }
+usage() {
+    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--meta-work-ratio <float>] [requirements_string_or_path_or_-]"
+    echo ""
+    echo "Options:"
+    echo "  --project-path <path>         : Path to the project directory on the host."
+    echo "  --magicprompt <path>     : (Optional) Path to a custom prompt.md template on the host."
+    echo "                             If not provided, uses '${DEFAULT_PROMPT_FILENAME}' relative to this script."
+    echo "  --project-vision <string_or_path> : (Optional) Project vision information as string or path to a text file."
+    echo "  --max-turns-by-iteration <N> : (Optional) Max turns for Claude agent per iteration. Default is 3. Ignored if --enter."
+    echo "  --enter                  : (Optional) Enter interactive mode with Claude within the container."
+    echo "                             Ignores requirements, prompt, and max-turns."
+    echo "  --verbose                : (Optional) Display the prompt being used before execution."
+    echo "  --iterations <N>         : (Optional) Number of iterations to run the command. Use 0 for infinite iterations (Ctrl+C to stop)."
+    echo "  --nofallback             : (Optional) Disable fallback to interactive mode if agent mode fails."
+    echo "  --init                   : (Optional) Force interactive mode and run it twice in a row."
+    echo "                             Automatically enables --enter."
+    echo "  --show-final-prompt      : (Optional) Show the final prompt and exit without running Claude."
+    echo "  --meta-work-ratio <float>: (Optional) Set the threshold ratio for work vs meta-work (default: ${META_WORK_RATIO}).
+  --drastic-change-threshold <float>: (Optional) Set the threshold for triggering drastic project changes (default: ${DRASTIC_CHANGE_THRESHOLD})."
+    # ... (rest of usage example) ...
+    exit 1
+}
+
+# --- Ensure tools are available on HOST ---
+# (Checks from previous version are good)
+for cmd in awk envsubst realpath docker; do
+    if ! command -v $cmd &> /dev/null; then
+        log "Error: Required command '$cmd' not found on host. Please install it."
+        if [ "$cmd" = "envsubst" ]; then log "Hint: 'envsubst' is often part of the 'gettext' package."; fi
+        exit 1
+    fi
+done
+
+# --- Get script's own directory ---
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+# --- Parse Arguments ---
+PROJECT_DIR_HOST=""
+CUSTOM_PROMPT_FILE_HOST=""
+PROJECT_VISION_CONTENT=""
+REQUIREMENTS_CONTENT=""
+ENTER_MODE=false
+MAX_TURNS=10 # Default max turns
+VERBOSE_MODE=false
+ITERATIONS=1 # Default to single iteration
+SHOW_FINAL_PROMPT=false
+USER_DRASTIC_CHANGE_THRESHOLD=""  # User can override the default
+
+POSITIONAL_ARGS=()
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+        --project-path) PROJECT_DIR_HOST="$2"; shift 2 ;;
+        --magicprompt) CUSTOM_PROMPT_FILE_HOST="$2"; shift 2 ;;
+        --project-vision) 
+            if [ -f "$2" ]; then
+                PROJECT_VISION_CONTENT=$(cat "$2")
+            else
+                PROJECT_VISION_CONTENT="$2"
+            fi
+            shift 2 ;;
+        --max-turns-by-iteration) MAX_TURNS="$2"; shift 2 ;;
+        --enter) ENTER_MODE=true; shift 1 ;;
+        --verbose) VERBOSE_MODE=true; shift 1 ;;
+        --iterations) ITERATIONS="$2"; shift 2 ;;
+        --nofallback) FALLBACK_TO_INTERACTIVE=false; shift 1 ;;
+        --init) INIT_MODE=true; ENTER_MODE=true; shift 1 ;;
+        --show-final-prompt) SHOW_FINAL_PROMPT=true; shift 1 ;;
+        --meta-work-ratio) 
+            if [[ "$2" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                META_WORK_RATIO="$2"
+            else
+                log "Error: --meta-work-ratio must be a valid float. Got: '$2'"
+                usage
+            fi
+            shift 2 ;;
+        --drastic-change-threshold) 
+            if [[ "$2" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                USER_DRASTIC_CHANGE_THRESHOLD="$2"
+            else
+                log "Error: --drastic-change-threshold must be a valid float. Got: '$2'"
+                usage
+            fi
+            shift 2 ;;
+        --help|-h) usage ;;
+        *) POSITIONAL_ARGS+=("$1"); shift 1 ;;
+    esac
+done
+
+if [ -z "$PROJECT_DIR_HOST" ]; then log "Error: --project-path is mandatory."; usage; fi
+PROJECT_DIR_HOST=$(mkdir -p "$PROJECT_DIR_HOST" && realpath "$PROJECT_DIR_HOST")
+
+PROJECT_DOT_JBSAYS_DIR="${PROJECT_DIR_HOST}/.jbsays"
+PROJECT_JBSAYS_CONFIG_DIR="${PROJECT_DOT_JBSAYS_DIR}/config"
+PROJECT_JBSAYS_CONFIG_FILE="${PROJECT_DOT_JBSAYS_DIR}/.claude.json"
+PROJECT_JBSAYS_LOGS_DIR="${PROJECT_DOT_JBSAYS_DIR}/logs"
+mkdir -p "$PROJECT_JBSAYS_CONFIG_DIR" "$PROJECT_JBSAYS_LOGS_DIR"
+touch "$PROJECT_JBSAYS_CONFIG_FILE"
+
+# Ensure .jbsays is in the project's .gitignore
+GITIGNORE_FILE="${PROJECT_DIR_HOST}/.gitignore"
+if [ ! -f "$GITIGNORE_FILE" ]; then
+    log "Creating .gitignore file in project directory"
+    echo "# JBSays temporary files" > "$GITIGNORE_FILE"
+    echo ".jbsays/" >> "$GITIGNORE_FILE"
+elif ! grep -q "^\.jbsays/\?$" "$GITIGNORE_FILE"; then
+    log "Adding .jbsays to existing .gitignore"
+    echo -e "\n# JBSays temporary files\n.jbsays/" >> "$GITIGNORE_FILE"
+fi
+
+FULL_PROMPT_FOR_CLAUDE=""
+
+if ! $ENTER_MODE; then
+    if [[ ! "$MAX_TURNS" =~ ^[0-9]+$ ]] || [ "$MAX_TURNS" -lt 1 ]; then
+        log "Error: --max-turns-by-iteration must be a positive integer. Got: '$MAX_TURNS'"
+        usage
+    fi
+    
+    if [[ ! "$ITERATIONS" =~ ^[0-9]+$ ]] || [ "$ITERATIONS" -lt 0 ]; then
+        log "Error: --iterations must be a non-negative integer. Got: '$ITERATIONS'"
+        usage
+    fi
+
+    if [ ${#POSITIONAL_ARGS[@]} -gt 0 ]; then
+        REQUIREMENTS_ARG="${POSITIONAL_ARGS[0]}"
+        if [ "$REQUIREMENTS_ARG" = "-" ]; then REQUIREMENTS_CONTENT=$(cat)
+        elif [ -f "$REQUIREMENTS_ARG" ]; then REQUIREMENTS_CONTENT=$(cat "$REQUIREMENTS_ARG")
+        else REQUIREMENTS_CONTENT="$REQUIREMENTS_ARG"; fi
+    fi
+
+    # --- Prepare and Build Prompt on HOST ---
+    # Generate new random number for each iteration
+    export RANDOM_NUM_VAR=$(awk 'BEGIN{srand(); printf "%.3f\n", rand()}')
+    export META_WORK_RATIO_VAR="${META_WORK_RATIO}"
+    # Use user-provided threshold or default
+    if [ -n "$USER_DRASTIC_CHANGE_THRESHOLD" ]; then
+        export DRASTIC_CHANGE_THRESHOLD_VAR="${USER_DRASTIC_CHANGE_THRESHOLD}"
+    else
+        export DRASTIC_CHANGE_THRESHOLD_VAR="${DRASTIC_CHANGE_THRESHOLD}"
+    fi
+    export PROJECT_GOAL_CONTENT_VAR="${REQUIREMENTS_CONTENT}"
+    export PROJECT_VISION_CONTENT_VAR="${PROJECT_VISION_CONTENT}"
+
+    PROMPT_TEMPLATE_PATH_TO_USE=""
+    if [ -n "$CUSTOM_PROMPT_FILE_HOST" ]; then
+        if [ ! -f "$CUSTOM_PROMPT_FILE_HOST" ]; then log "Error: Custom prompt file '$CUSTOM_PROMPT_FILE_HOST' not found."; exit 1; fi
+        log "Using custom prompt template from: $CUSTOM_PROMPT_FILE_HOST"
+        PROMPT_TEMPLATE_PATH_TO_USE="$CUSTOM_PROMPT_FILE_HOST"
+    else
+        DEFAULT_PROMPT_FILE_ON_HOST="${SCRIPT_DIR}/${DEFAULT_PROMPT_FILENAME}"
+        if [ ! -f "$DEFAULT_PROMPT_FILE_ON_HOST" ]; then
+            log "Error: Default prompt file '${DEFAULT_PROMPT_FILENAME}' not found in script directory '${SCRIPT_DIR}'."
+            log "Please create it or use --magicprompt."
+            exit 1
+        fi
+        log "Using default prompt template from: $DEFAULT_PROMPT_FILE_ON_HOST"
+        PROMPT_TEMPLATE_PATH_TO_USE="$DEFAULT_PROMPT_FILE_ON_HOST"
+    fi
+
+    FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+    
+    # Show the prompt and exit if --show-final-prompt was specified
+    if $SHOW_FINAL_PROMPT; then
+        echo "$FULL_PROMPT_FOR_CLAUDE"
+        exit 0
+    fi
+    
+    # Display prompt in verbose mode
+    if $VERBOSE_MODE; then
+        log "--- PROMPT BEING USED ---"
+        echo "$FULL_PROMPT_FOR_CLAUDE"
+        log "--- END OF PROMPT ---"
+    fi
+fi
+
+
+# --- Prepare Docker run options ---
+DOCKER_RUN_OPTS=("--rm")
+if $ENTER_MODE || [ -t 0 ]; then DOCKER_RUN_OPTS+=("-it"); else DOCKER_RUN_OPTS+=("-i"); fi
+
+DOCKER_RUN_OPTS+=("-v" "${PROJECT_DIR_HOST}:/home/node/workspace")
+DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_DIR}:/home/node/.claude")
+DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_FILE}:/home/node/.claude.json")
+if [ -f "$HOME/.gitconfig" ]; then DOCKER_RUN_OPTS+=("-v" "$HOME/.gitconfig:/home/node/.gitconfig:ro"); fi
+
+AGENT_ENV_VARS=()
+
+
+DOCKER_CMD_OVERRIDE=() # This will hold the command and its arguments for `docker run`
+
+if $ENTER_MODE; then
+    log "Entering interactive mode. Docker image default CMD 'claude' will be used."
+    # No DOCKER_CMD_OVERRIDE needed; Dockerfile's CMD ["claude"] will run.
+else # Agent mode
+    log "Agent mode (max turns: $MAX_TURNS): Overriding Docker CMD to run Claude with generated prompt."
+
+    DOCKER_CMD_OVERRIDE+=("claude") # The command
+    DOCKER_CMD_OVERRIDE+=("--dangerously-skip-permissions")
+    DOCKER_CMD_OVERRIDE+=("--verbose")
+    DOCKER_CMD_OVERRIDE+=("--output-format" "stream-json")
+    DOCKER_CMD_OVERRIDE+=("--max-turns" "$MAX_TURNS") # Add max-turns
+    DOCKER_CMD_OVERRIDE+=("-p" "$FULL_PROMPT_FOR_CLAUDE") # Pass the fully rendered prompt
+fi
+
+
+# --- Execute Docker ---
+if [ "$ITERATIONS" -eq 0 ] && ! $ENTER_MODE; then
+    log "Infinite iterations mode enabled. Press Ctrl+C to stop."
+elif [ "$ITERATIONS" -gt 1 ] && ! $ENTER_MODE; then
+    log "Will execute $ITERATIONS iterations."
+fi
+
+# Function to execute Docker
+execute_docker() {
+    local LOG_FILE_PATH="${PROJECT_JBSAYS_LOGS_DIR}/claude_run_$(date +%Y%m%d_%H%M%S).log"
+    
+    log "Project dir (host): ${PROJECT_DIR_HOST}"
+    if ! $ENTER_MODE; then
+        log "Log file for agent run: ${LOG_FILE_PATH}"
+    fi
+    log "Invoking Docker..."
+    echo "--- Claude Output (from container) ---"
+    
+    local FINAL_DOCKER_COMMAND=("docker" "run" "${DOCKER_RUN_OPTS[@]}" "${AGENT_ENV_VARS[@]}" "${DOCKER_FULL_IMAGE}" "${DOCKER_CMD_OVERRIDE[@]}")
+    # log "Executing: ${FINAL_DOCKER_COMMAND[*]}" # For debugging
+    
+    if $ENTER_MODE; then
+        if "${FINAL_DOCKER_COMMAND[@]}"; then
+            log "Docker interactive session finished."
+        else
+            log "Docker interactive session exited (code: $?)."
+        fi
+        return 0  # Don't exit script in loop mode
+    else # Agent mode
+        if "${FINAL_DOCKER_COMMAND[@]}" 2>&1 | tee "$LOG_FILE_PATH"; then
+            EXIT_CODE_ARRAY=("${PIPESTATUS[@]}")
+            DOCKER_RUN_EXIT_CODE=${EXIT_CODE_ARRAY[0]}
+            if [ "$DOCKER_RUN_EXIT_CODE" -eq 0 ]; then
+                log "Docker agent run finished successfully. Log: $LOG_FILE_PATH"
+            else
+                log "Docker agent run exited with code $DOCKER_RUN_EXIT_CODE. Log: $LOG_FILE_PATH"
+                if [ "$ITERATIONS" -eq 1 ]; then
+                    if $FALLBACK_TO_INTERACTIVE; then
+                        log "Agent mode failed. Will fallback to interactive mode..."
+                        return 1  # Signal to fallback
+                    else
+                        exit "$DOCKER_RUN_EXIT_CODE"
+                    fi
+                fi
+            fi
+        else
+            log "Docker agent run failed (tee or pipe error). Log: $LOG_FILE_PATH"
+            if [ "$ITERATIONS" -eq 1 ]; then
+                if $FALLBACK_TO_INTERACTIVE; then
+                    log "Agent mode failed. Will fallback to interactive mode..."
+                    return 1  # Signal to fallback
+                else
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+}
+
+# Main execution
+if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
+    # Multiple iterations mode
+    LOOP_COUNT=0
+    trap 'log "Caught interrupt signal. Exiting iterations..."; exit 0' INT
+    
+    while [ "$ITERATIONS" -eq 0 ] || [ $LOOP_COUNT -lt "$ITERATIONS" ]; do
+        # Generate new random number for each iteration
+        export RANDOM_NUM_VAR=$(awk 'BEGIN{srand(); printf "%.3f\n", rand()}')
+        export META_WORK_RATIO_VAR="${META_WORK_RATIO}"
+        # Use user-provided threshold or default
+        if [ -n "$USER_DRASTIC_CHANGE_THRESHOLD" ]; then
+            export DRASTIC_CHANGE_THRESHOLD_VAR="${USER_DRASTIC_CHANGE_THRESHOLD}"
+        else
+            export DRASTIC_CHANGE_THRESHOLD_VAR="${DRASTIC_CHANGE_THRESHOLD}"
+        fi
+        
+        # Regenerate the prompt with the new random number
+        if ! $ENTER_MODE; then
+            FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+            DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions" "--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS" "-p" "$FULL_PROMPT_FOR_CLAUDE")
+        fi
+        
+        LOOP_COUNT=$((LOOP_COUNT + 1))
+        log "=== Iteration #$LOOP_COUNT ==="
+        execute_docker
+        if [ "$ITERATIONS" -gt 0 ] && [ $LOOP_COUNT -ge "$ITERATIONS" ]; then
+            break
+        fi
+        log "Waiting 1 second before next iteration..."
+        sleep 1
+    done
+else
+    # Single execution mode
+    execute_docker
+    EXECUTE_RESULT=$?
+    
+    # Check if we need to fallback to interactive mode
+    if [ $EXECUTE_RESULT -eq 1 ] && $FALLBACK_TO_INTERACTIVE && ! $ENTER_MODE; then
+        log "Starting interactive mode as fallback..."
+        
+        # Reset environment for interactive mode
+        ENTER_MODE=true
+        DOCKER_CMD_OVERRIDE=()  # Clear the command override
+        
+        # Execute in interactive mode
+        execute_docker
+    fi
+    
+    # If in init mode, run interactive mode a second time
+    if $INIT_MODE; then
+        log "Init mode: running interactive mode a second time..."
+        execute_docker
+    fi
+fi
+
+log "Script finished."

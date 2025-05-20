@@ -1,0 +1,33 @@
+# JBSays configuration directories
+.jbsays/
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+*.pid
+*.seed
+*.pid.lock
+
+# Docker
+.docker/
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# IDE/Editor folders
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
