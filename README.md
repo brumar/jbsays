@@ -38,7 +38,7 @@ JBSays runs claude code in a loop, with --dangerously-skip-permissions on, and -
 
 ```bash
 # Clone the repository
-git clone https://github.com/username/jbsays.git
+git clone git@github.com:brumar/jbsays.git
 cd jbsays
 
 # Make the script executable
@@ -70,6 +70,7 @@ docker build -t jbsays:latest .
 
 - `--project-path <path>`: Path to the project directory on the host
 - `--init`: **REQUIRED FOR FIRST USE** - Initialize the project and authenticate Claude Code (run this flag first before any other commands)
+  - Note: At init time, Claude will complain that the config is incorrect and ask if it can create a new file. Say yes.
 
 ### Optional Arguments
 
