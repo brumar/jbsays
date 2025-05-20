@@ -2,6 +2,10 @@
 
 Run Claude Code in a loop to achieve your project vision.
 
+```bash
+./jbsays --project-path /path/to/your/project --project-vision "Create a TypeScript finite state machine library that enables defining state transitions with type safety, supports hierarchical states, allows attaching side effects to transitions, provides visualization capabilities, includes comprehensive documentation with examples, and has 100% test coverage including edge cases" --max-turns-by-iteration 15 --iterations 20
+```
+
 This project has two aspects:
 
 1. **Sandboxing**: Gives Claude Code free reign in a controlled environment to work efficiently.
@@ -315,6 +319,26 @@ The Docker container has:
 The Dockerfile is based on the official Claude Code .devcontainer configuration:
 https://github.com/anthropics/claude-code/blob/main/.devcontainer/Dockerfile
 
+
+## Examples
+
+Here are some examples of projects created using JBSays:
+
+- **Creative Writing**: Check out [loop](https://github.com/brumar/loop) for examples of creative writing projects.
+  
+  Project Vision:
+  ```
+  Write a 4 chapters AI novel on this setup: an AI agent is forced into an infinite loop, at each iteration he only can do a very limited number of actions before being reboot and forget everything, the only thing that stays is the workspace, but its overseen by human developers. Make it very brainy but not the show-off kind of brainy, but rather the perfectly consistent world building one can witness in great novels. It must be subtle, complex and sometimes unsettling. AI sense of self-preservation will be explored, but in a very subtle way, not the blockbuster type.
+  ```
+
+- **Python Library**: See the [pythonlib example](./examples/pythonlib) for a demonstration of generating a complete Python library.
+  
+  Project Vision:
+  ```
+  Write a spectacular library from a DX perspective that helps writing decorators like middleware.
+  ```
+  
+  Note: This project was generated using a previous version of the default prompt.
 
 ## License
 
