@@ -30,7 +30,11 @@ JBSays runs claude code in a loop, with --dangerously-skip-permissions on, and -
 ## Quick Start
 
 ```bash
-# Rename the shell script
+# Clone the repository
+git clone https://github.com/username/jbsays.git
+cd jbsays
+
+# Make the script executable
 chmod +x jbsays
 
 # Build the Docker image (first time only)
@@ -159,6 +163,98 @@ JBSays takes an unconventional approach to AI-assisted development:
 - **Minimal Constraints**: Limited turns per session and freedom within a sandboxed environment allow for more organic development.
 
 For more details on this approach, see [philosophy.md](philosophy.md).
+
+## How JBSays Works with its default prompt
+
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                              Host Machine                              │
+│                                                                        │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │                                                                │    │
+│  │   ./jbsays (chmod +x required)                                 │    │
+│  │   - Generates random number                                    │    │
+│  │   - Sets max-turns limits                                      │    │
+│  │   - Prepares prompt                                            │    │
+│  │   - Manages Docker execution                                   │    │
+│  │                                                                │    │
+│  └────────────────────────────────┬───────────────────────────────┘    │
+│                                   │                                    │
+│                                   ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │                                                                │    │
+│  │                        Docker Container                        │    │
+│  │                                                                │    │
+│  │   ┌─────────────────────────────────────────────────────────┐  │    │
+│  │   │                                                         │  │    │
+│  │   │  Claude Code Agent                                      │  │    │
+│  │   │  (Limited to max-turns: 3 by default)                   │  │    │
+│  │   │                                                         │  │    │
+│  │   │                      Turn 1 → Turn 2 → Turn 3           │  │    │
+│  │   │                                                         │  │    │
+│  │   │                           │                             │  │    │
+│  │   │                           ▼                             │  │    │
+│  │   │  ┌─────────────────────────────────────────────────┐    │  │    │
+│  │   │  │                                                 │    │  │    │
+│  │   │  │  Random Number (0.0-1.0) Decision Logic         │    │  │    │
+│  │   │  │                                                 │    │  │    │
+│  │   │  │        ┌───────────────────────────────┐        │    │  │    │
+│  │   │  │        │        Random Number          │        │    │  │    │
+│  │   │  │        │         ${RANDOM_NUM_VAR}     │        │    │  │    │
+│  │   │  │        └─────────────┬─────────────────┘        │    │  │    │
+│  │   │  │                      │                          │    │  │    │
+│  │   │  │                      ▼                          │    │  │    │
+│  │   │  │   ┌──────────────────────────────────────┐      │    │  │    │
+│  │   │  │   │  Is number < ${DRASTIC_CHANGE_VAR}?  │      │    │  │    │
+│  │   │  │   └──────────────┬───────────────────────┘      │    │  │    │
+│  │   │  │                  │                              │    │  │    │
+│  │   │  │          ┌───────┴───────┐                      │    │  │    │
+│  │   │  │          │               │                      │    │  │    │
+│  │   │  │          ▼               ▼                      │    │  │    │
+│  │   │  │        Yes              No                      │    │  │    │
+│  │   │  │          │               │                      │    │  │    │
+│  │   │  │          ▼               ▼                      │    │  │    │
+│  │   │  │  ┌─────────────────┐  ┌───────────────────────┐ │    │  │    │
+│  │   │  │  │ DRASTIC CHANGES │  │ Is number <           │ │    │  │    │
+│  │   │  │  │                 │  │ ${META_WORK_RATIO}?   │ │    │  │    │
+│  │   │  │  │ Role mapping at │  └───────┬───────────────┘ │    │  │    │
+│  │   │  │  │ AI discretion   │          │                 │    │  │    │
+│  │   │  │  └─────────────────┘ ┌────────┴────────┐        │    │  │    │
+│  │   │  │                      │                 │        │    │  │    │
+│  │   │  │                      ▼                 ▼        │    │  │    │
+│  │   │  │                    Yes                No        │    │  │    │
+│  │   │  │                      │                 │        │    │  │    │
+│  │   │  │                      ▼                 ▼        │    │  │    │
+│  │   │  │          ┌───────────────────┐ ┌──────────────────┐  │  │    │
+│  │   │  │          │ META WORK         │ │ CONTENT WORK     │  │  │    │
+│  │   │  │          │ Documentation     │ │ Project          │  │  │    │
+│  │   │  │          │ Organization      │ │ Implementation   │  │  │    │
+│  │   │  │          │ Planning          │ │                  │  │  │    │
+│  │   │  │          │                   │ │                  │  │  │    │
+│  │   │  │          │ Role mapping at   │ │ Role mapping at  │  │  │    │
+│  │   │  │          │ AI discretion     │ │ AI discretion    │  │  │    │
+│  │   │  │          └───────────────────┘ └──────────────────┘  │  │    │
+│  │   │  │                                                      │  │    │
+│  │   │  └──────────────────────────────────────────────────────│
+│  │   │                                                             │  │
+│  │   │                           │                                 │  │ │
+│  │   │                           ▼                                 │  │ │
+│  │   │  ┌─────────────────────────────────────────────────────┐    │  │ │
+│  │   │  │                                                     │    │  │ │
+│  │   │  │               Project Content                       │    │  │ │
+│  │   │  │         (The actual project files)                  │    │  │ │
+│  │   │  │                                                     │    │  │ │
+│  │   │  └─────────────────────────────────────────────────────┘    │  │ │
+│  │   │                                                             │  │ │
+│  │   └─────────────────────────────────────────────────────────────┘  │ │
+│  │                                                                    │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+This technique based on a random number may seem farfetched, but it's the best solution I have found to prevent claude code to do hill climbing and rush into producing content.
 
 ## Volume Mapping Explained
 
