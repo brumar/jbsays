@@ -88,6 +88,7 @@ docker build -t jbsays:latest .
 - `--iterations <N>`: Number of iterations to run the command (use 0 for infinite iterations, Ctrl+C to stop)
 - `--nofallback`: Disable fallback to interactive mode if agent mode fails
 - `--no-git`: Skip git initialization even if no `.git` directory exists
+- `--content-at-root`: Indicates that content should be created at the project root level instead of inside release/content
 
 ### Examples
 
@@ -323,6 +324,43 @@ Without initialization, the tool will not work correctly.
 If git initialization fails during init, an error message will suggest using the `--no-git` flag.
 
 ⚠️ **IMPORTANT**: The `.jbsays` folder contains logs and credentials that must remain private. The script automatically adds it to `.gitignore`, but you should verify this protection remains in place.
+
+## Using JBSays with Existing Projects
+
+When working with existing projects, follow these steps to ensure a smooth experience:
+
+1. **Create a backup**: Always make a backup of your project before running JBSays on it
+   ```bash
+   cp -r /path/to/project /path/to/project_backup
+   ```
+
+2. **Initialize JBSays**: Initialize JBSays for your project
+   ```bash
+   ./jbsays --project-path /path/to/project --init
+   ```
+
+3. **Consider content location**: For projects where content should be created at the root level rather than in release/content subdirectories, use the `--content-at-root` flag
+   ```bash
+   ./jbsays --project-path /path/to/project --project-vision "Refactor the API" --content-at-root
+   ```
+
+This flag is especially important when:
+- Working with existing codebases not following the trinity directory structure
+- Projects where you want all content to be generated at the root level
+- Projects with their own predetermined structure you want to preserve
+
+### Example: Refactoring an Existing Web Application
+
+```bash
+# First make a backup
+cp -r ./my-webapp ./my-webapp-backup
+
+# Initialize JBSays
+./jbsays --project-path ./my-webapp --init
+
+# Run JBSays on the project with content at root level
+./jbsays --project-path ./my-webapp --project-vision "Refactor the authentication system" --content-at-root --iterations 10
+```
 
 ## Security Considerations
 
