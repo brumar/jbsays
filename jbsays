@@ -233,7 +233,7 @@ AGENT_ENV_VARS=()
 DOCKER_CMD_OVERRIDE=() # This will hold the command and its arguments for `docker run`
 
 if $ENTER_MODE; then
-    if $ENTER_BYPASS_MODE; then
+    if $ENTER_BYPASS_MODE || $INIT_MODE; then
         log "Entering interactive mode with bypass permissions. Docker image default CMD 'claude' will be used."
         DOCKER_CMD_OVERRIDE+=("claude" "--dangerously-skip-permissions")
     else
@@ -334,7 +334,7 @@ if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
             DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions" "--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS" "-p" "$FULL_PROMPT_FOR_CLAUDE")
         else
             # Reset command for enter mode
-            if $ENTER_BYPASS_MODE; then
+            if $ENTER_BYPASS_MODE || $INIT_MODE; then
                 DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions")
             else
                 DOCKER_CMD_OVERRIDE=("claude")
