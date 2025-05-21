@@ -57,13 +57,13 @@ docker build -t jbsays:latest .
 # Accept the proposition to fix the config file, accept the --dangerously-skip-permissions, provide your Claude account.
 
 # Run with project vision and path
-./jbsays --project-path /path/to/your/project --project-vision "Refactor the application"
+./jbsays --project-path /path/to/your/project --project-vision "Refactor the application" --iterations 10
 
 # Run in interactive mode  
 ./jbsays --project-path /path/to/your/project --enter
 
 # Run with custom prompt and project vision
-./jbsays --project-path /path/to/your/project --magicprompt /path/to/custom_prompt.md --project-vision "Build a REST API"
+./jbsays --project-path /path/to/your/project --magicprompt /path/to/custom_prompt.md --project-vision "Build a REST API" --iterations 25
 ```
 
 ## Usage
