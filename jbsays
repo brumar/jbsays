@@ -123,7 +123,7 @@ if [ -d "$PROJECT_DIR_HOST" ]; then
     # If directory exists but doesn't contain .jbsays file, require force flag
     elif ! $FORCE_MODE; then
         log "Error: Directory at '$PROJECT_DIR_HOST' already exists but doesn't contain a .jbsays folder."
-        log "Use '--force' to override if you want to use this directory for a new project."
+        log "Use '--force' to override if you want to use this directory"
         exit 1
     fi
 fi
