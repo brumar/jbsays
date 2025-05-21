@@ -54,6 +54,7 @@ docker build -t jbsays:latest .
 
 # IMPORTANT: Initialize the project first (required for authorization)
 ./jbsays --project-path /path/to/your/project --init
+# Accept the proposition to fix the config file, accept the --dangerously-skip-permissions, provide your Claude account.
 
 # Run with project vision and path
 ./jbsays --project-path /path/to/your/project --project-vision "Refactor the application"
