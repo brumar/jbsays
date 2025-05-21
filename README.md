@@ -37,6 +37,7 @@ JBSays runs claude code in a loop, with --dangerously-skip-permissions on, and -
 - Docker containers are probably not perfect security boundaries
 - While the default prompt asks Claude to commit systematically, empirically it does not always occur automatically
 - Users are strongly advised to work on fresh new projects or create backups before starting, as significant changes may be made to the codebase
+- The `.jbsays` folder contains sensitive information including logs and credentials that must be kept private (automatically added to `.gitignore`)
 
 ## Quick Start
 
@@ -159,11 +160,13 @@ RUN npm install -g typescript prettier eslint
 <your-project>/                  # Your project directory on the host
 ├── CLAUDE.md                   # Persistent memory for Claude across sessions
 ├── PROJECT_GOAL.md            # Current project goals (if you use them)
-└── .jbsays/                   # JBSays-specific Claude configuration
+└── .jbsays/                   # JBSays-specific Claude configuration (MUST REMAIN PRIVATE)
     ├── config/               # Configuration files managed by Claude Code
     ├── logs/                # Execution logs for each run
     └── .claude.json         # Claude settings specific to this project
 ```
+
+⚠️ **SECURITY WARNING**: The `.jbsays` folder contains sensitive information including logs and credentials. While the script automatically adds it to `.gitignore`, you must ensure it remains private. Never manually remove it from `.gitignore` or share its contents.
 
 ## Development Philosophy
 
@@ -312,10 +315,13 @@ You **MUST** run `./jbsays --project-path /path/to/project --init` for each new 
 2. Generates credentials based on your Claude.ai account
 3. Sets up the project environment properly
 4. Initializes a git repository if one doesn't exist (use `--no-git` to skip this)
+5. Creates the `.jbsays` folder and adds it to `.gitignore` to protect sensitive information
 
 Without initialization, the tool will not work correctly.
 
 If git initialization fails during init, an error message will suggest using the `--no-git` flag.
+
+⚠️ **IMPORTANT**: The `.jbsays` folder contains logs and credentials that must remain private. The script automatically adds it to `.gitignore`, but you should verify this protection remains in place.
 
 ## Security Considerations
 
