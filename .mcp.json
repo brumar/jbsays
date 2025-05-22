@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pandas-analysis": {
+      "command": "npx",
+      "args": ["-y", "@alistairwalsh/pandas-mcp-server"]
+    },
+    "playwright": {
+        "type": "sse",
+         "url": "http://playwright-mcp-server:8931/sse"
+    }
+  }
+}

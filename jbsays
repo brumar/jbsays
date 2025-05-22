@@ -3,18 +3,23 @@ set -euo pipefail
 
 # --- Configuration ---
 DOCKER_IMAGE_NAME="jbsays"
-DOCKER_IMAGE_TAG="latest"
+DOCKER_IMAGE_TAG="fullstack"
 DOCKER_FULL_IMAGE="${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
 DEFAULT_PROMPT_FILENAME="double_trinity_prompt.md"
 FALLBACK_TO_INTERACTIVE=true
 INIT_MODE=false
 NO_GIT=false
 CONTENT_AT_ROOT=false
+MCP_CONFIG_FILE=""
+ALLOWED_TOOLS=""
+PORT_MAPPINGS=()
+DOCKER_NETWORK=""
+CONTAINER_NAME="jbsays"
 
 # Double Trinity Canon Structure
 CANON_DOMAINS=("meta" "rules" "release")
 CANON_LOCI_PRIMARY=("content" "request_for_changes")
-CANON_LOCI_ALL=("content" "request_for_changes" "human_inbox")
+# Note: human_inbox is now replaced by a single root-level inbox/ directory
 
 # --- Focus Area Weights ---
 # Define base weight and multipliers
@@ -25,15 +30,45 @@ FOCUS_AREA_WEIGHTS["meta/content"]=${BASE_WEIGHT}
 FOCUS_AREA_WEIGHTS["meta/request_for_changes"]=${BASE_WEIGHT}
 FOCUS_AREA_WEIGHTS["rules/content"]=${BASE_WEIGHT}
 FOCUS_AREA_WEIGHTS["rules/request_for_changes"]=${BASE_WEIGHT}
-FOCUS_AREA_WEIGHTS["release/content"]=$((BASE_WEIGHT * 2)) # Double weight for release/content
-FOCUS_AREA_WEIGHTS["release/request_for_changes"]=${BASE_WEIGHT}
+FOCUS_AREA_WEIGHTS["release/content"]=$((BASE_WEIGHT * 4)) # Double weight for release/content
+FOCUS_AREA_WEIGHTS["release/request_for_changes"]=$((BASE_WEIGHT * 2))
 
 
 # --- Helper Functions ---
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"; }
+
+# Add MCP flags to DOCKER_CMD_OVERRIDE if configured
+add_mcp_flags() {
+    if [ -n "${MCP_CONFIG_FILE_ABS:-}" ]; then
+        DOCKER_CMD_OVERRIDE+=("--mcp-config" ".mcp.json")
+    fi
+    if [ -n "$ALLOWED_TOOLS" ]; then
+        DOCKER_CMD_OVERRIDE+=("--allowedTools" "$ALLOWED_TOOLS")
+    fi
+}
 usage() {
-    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--force] [--no-git] [--content-at-root] [project_goal_string_or_path_or_-]"
-    # ... (rest of usage) ...
+    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--force] [--no-git] [--content-at-root] [--mcp-config <mcp_config_file>] [--allowedTools <tool_pattern>] [--port <port_mapping>] [--network <network_name>] [--container-name <name>] [project_goal_string_or_path_or_-]"
+    echo ""
+    echo "Options:"
+    echo "  --project-path <path>        Path to the project directory (required)"
+    echo "  --magicprompt <file>         Custom prompt template file"
+    echo "  --project-vision <text|file> Project vision/goal (text or file path)"
+    echo "  --max-turns-by-iteration <N> Maximum turns per iteration for agent mode"
+    echo "  --enter                      Enter interactive mode"
+    echo "  --verbose                    Enable verbose output"
+    echo "  --iterations <N>             Number of iterations (0 = infinite)"
+    echo "  --nofallback                 Don't fallback to interactive on agent failure"
+    echo "  --init                       Initialize project structure"
+    echo "  --show-final-prompt          Show the final prompt and exit"
+    echo "  --force                      Force execution"
+    echo "  --no-git                     Skip git initialization"
+    echo "  --content-at-root            Create content at project root"
+    echo "  --mcp-config <file>          MCP server configuration file"
+    echo "  --allowedTools <pattern>     Allowed tools pattern (e.g., 'mcp__filesystem__*')"
+    echo "  --port <mapping>             Add port mapping (format: host:container or port)"
+    echo "  --network <network>          Connect container to an existing Docker network"
+    echo "  --container-name <name>      Docker container name (default: jbsays)"
+    echo ""
     exit 1
 }
 
@@ -87,6 +122,11 @@ while [[ $# -gt 0 ]]; do
         --force) FORCE_MODE=true; shift 1 ;;
         --no-git) NO_GIT=true; shift 1 ;;
         --content-at-root) CONTENT_AT_ROOT=true; shift 1 ;;
+        --mcp-config) MCP_CONFIG_FILE="$2"; shift 2 ;;
+        --allowedTools) ALLOWED_TOOLS="$2"; shift 2 ;;
+        --port) PORT_MAPPINGS+=("$2"); shift 2 ;;
+        --network) DOCKER_NETWORK="$2"; shift 2 ;;
+        --container-name) CONTAINER_NAME="$2"; shift 2 ;;
         --help|-h) usage ;;
         *) POSITIONAL_ARGS+=("$1"); shift 1 ;;
     esac
@@ -106,6 +146,16 @@ fi
 
 PROJECT_DIR_HOST_ABS=$(mkdir -p "$PROJECT_DIR_HOST" && realpath "$PROJECT_DIR_HOST")
 
+# Validate MCP config file if provided
+if [ -n "$MCP_CONFIG_FILE" ]; then
+    if [ ! -f "$MCP_CONFIG_FILE" ]; then
+        log "Error: MCP config file '$MCP_CONFIG_FILE' not found."
+        exit 1
+    fi
+    MCP_CONFIG_FILE_ABS=$(realpath "$MCP_CONFIG_FILE")
+    log "Using MCP config file: $MCP_CONFIG_FILE_ABS"
+fi
+
 PROJECT_DOT_JBSAYS_DIR="${PROJECT_DIR_HOST_ABS}/.jbsays"
 PROJECT_JBSAYS_CONFIG_DIR="${PROJECT_DOT_JBSAYS_DIR}/config"
 PROJECT_JBSAYS_CONFIG_FILE="${PROJECT_DOT_JBSAYS_DIR}/.claude.json"
@@ -116,10 +166,13 @@ touch "$PROJECT_JBSAYS_CONFIG_FILE"
 ensure_double_trinity_structure() {
     log "Ensuring Double Trinity Canon directory structure in ${PROJECT_DIR_HOST_ABS}"
     for domain in "${CANON_DOMAINS[@]}"; do
-        for locus in "${CANON_LOCI_ALL[@]}"; do
+        for locus in "${CANON_LOCI_PRIMARY[@]}"; do
             mkdir -p "${PROJECT_DIR_HOST_ABS}/${domain}/${locus}"
         done
     done
+    # Create the new centralized inbox structure
+    mkdir -p "${PROJECT_DIR_HOST_ABS}/inbox/to_human"
+    mkdir -p "${PROJECT_DIR_HOST_ABS}/inbox/from_human"
     touch "${PROJECT_DIR_HOST_ABS}/CLAUDE.md"
     touch "${PROJECT_DIR_HOST_ABS}/rules/content/roles.md"
 }
@@ -267,13 +320,36 @@ fi
 
 # --- Prepare Docker Run Options and Command ---
 # ... (This section remains largely the same as the previous "unified prompt" version) ...
-DOCKER_RUN_OPTS=("--rm")
+DOCKER_RUN_OPTS=("--rm" "--name" "$CONTAINER_NAME")
 if $ENTER_MODE || [ -t 0 ] || $SHOW_FINAL_PROMPT ; then DOCKER_RUN_OPTS+=("-it"); else DOCKER_RUN_OPTS+=("-i"); fi
 
+DOCKER_RUN_OPTS+=("-e" "JBSAYS_CONTAINER_NAME=$CONTAINER_NAME")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_DIR_HOST_ABS}:/home/node/workspace")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_DIR}:/home/node/.claude")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_FILE}:/home/node/.claude.json")
 if [ -f "$HOME/.gitconfig" ]; then DOCKER_RUN_OPTS+=("-v" "$HOME/.gitconfig:/home/node/.gitconfig:ro"); fi
+
+# Add port mappings if provided
+for port_mapping in "${PORT_MAPPINGS[@]}"; do
+    # Validate port mapping format (host:container or just port)
+    if [[ "$port_mapping" =~ ^[0-9]+:[0-9]+$ ]] || [[ "$port_mapping" =~ ^[0-9]+$ ]]; then
+        DOCKER_RUN_OPTS+=("-p" "$port_mapping")
+        log "Added port mapping: $port_mapping"
+    else
+        log "Warning: Invalid port mapping format '$port_mapping'. Use format 'host:container' or 'port'"
+    fi
+done
+
+# Add network if provided
+if [ -n "$DOCKER_NETWORK" ]; then
+    DOCKER_RUN_OPTS+=("--network" "$DOCKER_NETWORK")
+    log "Connected to Docker network: $DOCKER_NETWORK"
+fi
+
+# Mount MCP config file if provided
+if [ -n "${MCP_CONFIG_FILE_ABS:-}" ]; then
+    DOCKER_RUN_OPTS+=("-v" "${MCP_CONFIG_FILE_ABS}:/home/node/workspace/.mcp.json:ro")
+fi
 
 DOCKER_CMD_OVERRIDE=()
 if $ENTER_BYPASS_MODE || $INIT_MODE; then
@@ -309,6 +385,9 @@ if ! $ENTER_MODE; then
     DOCKER_CMD_OVERRIDE+=("--verbose")
     DOCKER_CMD_OVERRIDE+=("--output-format" "stream-json")
     DOCKER_CMD_OVERRIDE+=("--max-turns" "$MAX_TURNS_VAR")
+    
+    # Add MCP flags if configured
+    add_mcp_flags
 fi
 log "Final Docker CMD override: ${DOCKER_CMD_OVERRIDE[*]}"
 
@@ -432,6 +511,9 @@ if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
             DOCKER_CMD_OVERRIDE+=("-p" "$FULL_PROMPT_FOR_CLAUDE")
         fi
         DOCKER_CMD_OVERRIDE+=("--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS_VAR")
+        
+        # Add MCP flags if configured
+        add_mcp_flags
 
         execute_docker
         
@@ -470,6 +552,9 @@ else
         fi
         # --enter mode has no prompt
         
+        # Add MCP flags if configured
+        add_mcp_flags
+        
         execute_docker
     fi
 fi
@@ -498,6 +583,9 @@ if $INIT_MODE; then
         DOCKER_CMD_OVERRIDE=("claude")
     fi
     # --enter mode has no prompt
+    
+    # Add MCP flags if configured
+    add_mcp_flags
 
     execute_docker
     

@@ -1,8 +1,15 @@
-FROM node:20
+# Multi-stage build for extensibility
+FROM node:20 as base
 
 # Timezone setup (optional)
 ARG TZ=Etc/UTC
 ENV TZ="$TZ"
+
+RUN npm install -g @playwright/mcp@latest
+
+# Install Chrome browser and dependencies required by Playwright
+# Although the base image should include them, explicitly install in case MCP cannot find them
+RUN npx playwright install chrome && npx playwright install-deps chrome
 
 # Install dev tools, CLI utilities, and tools for agent operation
 RUN apt-get update && apt-get install -y \
@@ -10,6 +17,7 @@ RUN apt-get update && apt-get install -y \
   gh iptables ipset iproute2 dnsutils aggregate jq \
   wget curl less \
   gettext-base ca-certificates \
+  qpdf mupdf-tools \
   && apt-get clean
 
 # Install git-delta (nicer git diffs) - Optional, can be removed if not strictly needed for Claude
@@ -73,8 +81,17 @@ USER $USERNAME
 ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
 ENV PATH=$PATH:/usr/local/share/npm-global/bin
 RUN npm install -g @anthropic-ai/claude-code
+
+# Set container name as environment variable
+ENV CONTAINER_NAME=jbsays
+
+# Copy MCP configuration
+COPY .mcp.json /home/$USERNAME/workspace/.mcp.json
+
 # Switch back to root for any further root-level operations if needed
 USER root 
+
+RUN chown $USERNAME:$USERNAME /home/$USERNAME/workspace/.mcp.json
 
 # Copy default prompt template into the image
 

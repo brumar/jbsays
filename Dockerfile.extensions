@@ -1,0 +1,83 @@
+# Multi-stage extensions for JBSays
+ARG BASE_IMAGE=jbsays:latest
+
+# ============================================================================
+# BLOCKCHAIN & REALT ANALYSIS TOOLS
+# ============================================================================
+FROM ${BASE_IMAGE} as blockchain
+USER root
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-dev python3.11-venv\
+    build-essential \
+    && apt-get clean
+
+RUN pip3.11 install --no-cache-dir \
+    web3 \
+    pandas \
+    numpy \
+    matplotlib \
+    seaborn \
+    requests \
+    aiohttp \
+    python-dotenv \
+    pytest \
+    pytest-asyncio \
+    ethereum-etl \
+    eth-data-tools \
+    jupyterlab
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+USER node
+WORKDIR /home/node/workspace
+
+# ============================================================================
+# DATA SCIENCE TOOLS
+# ============================================================================
+FROM ${BASE_IMAGE} as datascience  
+USER root
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-dev \
+    build-essential \
+    && apt-get clean
+
+RUN pip3.11 install --no-cache-dir \
+    pandas \
+    numpy \
+    scipy \
+    matplotlib \
+    seaborn \
+    plotly \
+    jupyterlab \
+    scikit-learn \
+    requests \
+    pytest
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+USER node
+WORKDIR /home/node/workspace
+
+# ============================================================================
+# FULL-STACK DEVELOPMENT
+# ============================================================================
+FROM ${BASE_IMAGE} as fullstack
+USER root
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-venv\
+    && apt-get clean
+
+USER node
+RUN npm install -g \
+    typescript \
+    @types/node \
+    ts-node \
+    prettier \
+    eslint \
+    vite \
+    jest
+
+WORKDIR /home/node/workspace
+
+# ============================================================================
+# DEFAULT TO BASE IMAGE
+# ============================================================================
+FROM ${BASE_IMAGE} as default
