@@ -1,0 +1,27 @@
+services:
+  playwright-mcp:
+    build: .
+    container_name: playwright-mcp-server
+    tty: true
+    env_file:
+      - .env
+    environment:
+      # Default is headed mode (SSE connection) unless overridden by .env
+      - HEADLESS=${HEADLESS:-false}
+      # Internal container port (used by entrypoint.sh)
+      - MCP_PORT=${MCP_HOST_PORT:-8931}
+      # --- Settings for headed mode (assuming WSL2 + WSLg) ---
+      # Read from .env file (with defaults)
+      - DISPLAY=${DISPLAY:-:0}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/0} # Default assumes root (ID 0)
+    ports:
+      # Map host port (from .env) to the same internal port
+      - "${MCP_HOST_PORT:-8931}:${MCP_HOST_PORT:-8931}"
+    volumes:
+      # --- Volume mounts for headed mode (WSL2 + WSLg) ---
+      # Read host paths from .env file (with defaults)
+      - ${X11_HOST_PATH:-/tmp/.X11-unix}:/tmp/.X11-unix:rw
+      - ${WSLG_HOST_PATH:-/mnt/wslg}:/mnt/wslg:ro # WSLg related (read-only)
+    # shm_size: '2gb' # Increase shared memory size if needed
+    # init: true # Use an init process to reap zombie processes

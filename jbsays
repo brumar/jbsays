@@ -30,7 +30,7 @@ FOCUS_AREA_WEIGHTS["meta/content"]=${BASE_WEIGHT}
 FOCUS_AREA_WEIGHTS["meta/request_for_changes"]=${BASE_WEIGHT}
 FOCUS_AREA_WEIGHTS["rules/content"]=${BASE_WEIGHT}
 FOCUS_AREA_WEIGHTS["rules/request_for_changes"]=${BASE_WEIGHT}
-FOCUS_AREA_WEIGHTS["release/content"]=$((BASE_WEIGHT * 4)) # Double weight for release/content
+FOCUS_AREA_WEIGHTS["release/content"]=$((BASE_WEIGHT * 10)) # Double weight for release/content
 FOCUS_AREA_WEIGHTS["release/request_for_changes"]=$((BASE_WEIGHT * 2))
 
 
@@ -47,12 +47,13 @@ add_mcp_flags() {
     fi
 }
 usage() {
-    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--force] [--no-git] [--content-at-root] [--mcp-config <mcp_config_file>] [--allowedTools <tool_pattern>] [--port <port_mapping>] [--network <network_name>] [--container-name <name>] [project_goal_string_or_path_or_-]"
+    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--prompt-override <text_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--force] [--no-git] [--content-at-root] [--mcp-config <mcp_config_file>] [--allowedTools <tool_pattern>] [--port <port_mapping>] [--network <network_name>] [--container-name <name>] [project_goal_string_or_path_or_-]"
     echo ""
     echo "Options:"
     echo "  --project-path <path>        Path to the project directory (required)"
     echo "  --magicprompt <file>         Custom prompt template file"
     echo "  --project-vision <text|file> Project vision/goal (text or file path)"
+    echo "  --prompt-override <text|file> Override final prompt directly (text or file path)"
     echo "  --max-turns-by-iteration <N> Maximum turns per iteration for agent mode"
     echo "  --enter                      Enter interactive mode"
     echo "  --verbose                    Enable verbose output"
@@ -90,9 +91,10 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 PROJECT_DIR_HOST=""
 CUSTOM_PROMPT_FILE_HOST=""
 PROJECT_GOAL_CONTENT=""
+PROMPT_OVERRIDE_CONTENT=""
 ENTER_MODE=false
 ENTER_BYPASS_MODE=false
-MAX_TURNS=20
+MAX_TURNS=40
 VERBOSE_MODE=false
 ITERATIONS=1
 SHOW_FINAL_PROMPT=false
@@ -109,6 +111,13 @@ while [[ $# -gt 0 ]]; do
                 PROJECT_GOAL_CONTENT=$(cat "$2")
             else
                 PROJECT_GOAL_CONTENT="$2"
+            fi
+            shift 2 ;;
+        --prompt-override)
+            if [ -f "$2" ]; then
+                PROMPT_OVERRIDE_CONTENT=$(cat "$2")
+            else
+                PROMPT_OVERRIDE_CONTENT="$2"
             fi
             shift 2 ;;
         --max-turns-by-iteration) MAX_TURNS="$2"; shift 2 ;;
@@ -160,8 +169,64 @@ PROJECT_DOT_JBSAYS_DIR="${PROJECT_DIR_HOST_ABS}/.jbsays"
 PROJECT_JBSAYS_CONFIG_DIR="${PROJECT_DOT_JBSAYS_DIR}/config"
 PROJECT_JBSAYS_CONFIG_FILE="${PROJECT_DOT_JBSAYS_DIR}/.claude.json"
 PROJECT_JBSAYS_LOGS_DIR="${PROJECT_DOT_JBSAYS_DIR}/logs"
-mkdir -p "$PROJECT_JBSAYS_CONFIG_DIR" "$PROJECT_JBSAYS_LOGS_DIR"
+PROJECT_KNOWTHYSELF_DIR="${PROJECT_DIR_HOST_ABS}/.knowthyself"
+mkdir -p "$PROJECT_JBSAYS_CONFIG_DIR" "$PROJECT_JBSAYS_LOGS_DIR" "$PROJECT_KNOWTHYSELF_DIR"
 touch "$PROJECT_JBSAYS_CONFIG_FILE"
+
+# --- Function to create .knowthyself context ---
+create_knowthyself_context() {
+    log "Creating .knowthyself execution context..."
+    
+    # List of files to copy to .knowthyself
+    KNOWTHYSELF_FILES=(
+        "${SCRIPT_DIR}/jbsays"
+        "${SCRIPT_DIR}/Dockerfile"
+        "${SCRIPT_DIR}/Dockerfile.extensions"
+        "${SCRIPT_DIR}/double_trinity_prompt.md"
+        "${SCRIPT_DIR}/.mcp.json"
+        "${SCRIPT_DIR}/extensions/docker-compose.yml"
+        "${SCRIPT_DIR}/extensions/.env"
+    )
+    
+    # Copy files that exist
+    for file in "${KNOWTHYSELF_FILES[@]}"; do
+        filename=$(basename "$file")
+        if [ -f "$file" ]; then
+            cp "$file" "${PROJECT_KNOWTHYSELF_DIR}/${filename}"
+            log "Copied $filename to .knowthyself/"
+        else
+            echo "# File not found: $file" > "${PROJECT_KNOWTHYSELF_DIR}/${filename}.missing"
+            log "File $filename missing, created .missing marker"
+        fi
+    done
+    
+    # Create execution context metadata
+    cat > "${PROJECT_KNOWTHYSELF_DIR}/execution-context.json" << EOF
+{
+    "timestamp": "$(date -Iseconds)",
+    "script_dir": "${SCRIPT_DIR}",
+    "project_dir": "${PROJECT_DIR_HOST_ABS}",
+    "docker_image": "${DOCKER_FULL_IMAGE}",
+    "container_name": "${CONTAINER_NAME}",
+    "focus_area": "${FOCUS_AREA_VAR:-not_set}",
+    "max_turns": "${MAX_TURNS_VAR:-not_set}",
+    "enter_mode": "$ENTER_MODE",
+    "init_mode": "$INIT_MODE",
+    "content_at_root": "$CONTENT_AT_ROOT",
+    "mcp_config_file": "${MCP_CONFIG_FILE:-none}",
+    "allowed_tools": "${ALLOWED_TOOLS:-none}",
+    "docker_network": "${DOCKER_NETWORK:-none}",
+    "port_mappings": [$(printf '"%s",' "${PORT_MAPPINGS[@]}" | sed 's/,$//')]
+}
+EOF
+    
+    # Create launch flags file
+    echo "# JBSays launch flags used for this session" > "${PROJECT_KNOWTHYSELF_DIR}/launch-flags.txt"
+    printf "DOCKER_CMD_OVERRIDE: %s\n" "${DOCKER_CMD_OVERRIDE[*]}" >> "${PROJECT_KNOWTHYSELF_DIR}/launch-flags.txt"
+    printf "DOCKER_RUN_OPTS: %s\n" "${DOCKER_RUN_OPTS[*]}" >> "${PROJECT_KNOWTHYSELF_DIR}/launch-flags.txt"
+    
+    log ".knowthyself context created successfully"
+}
 
 ensure_double_trinity_structure() {
     log "Ensuring Double Trinity Canon directory structure in ${PROJECT_DIR_HOST_ABS}"
@@ -304,7 +369,13 @@ if ! $ENTER_MODE; then
     fi
 fi
 
-FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+# Use prompt override if provided, otherwise use the template with variable substitution
+if [ -n "$PROMPT_OVERRIDE_CONTENT" ]; then
+    FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
+    log "Using prompt override (bypassing template and variable substitution)"
+else
+    FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+fi
 
 if $SHOW_FINAL_PROMPT; then
     echo "$FULL_PROMPT_FOR_CLAUDE"
@@ -327,6 +398,7 @@ DOCKER_RUN_OPTS+=("-e" "JBSAYS_CONTAINER_NAME=$CONTAINER_NAME")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_DIR_HOST_ABS}:/home/node/workspace")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_DIR}:/home/node/.claude")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_FILE}:/home/node/.claude.json")
+DOCKER_RUN_OPTS+=("-v" "${PROJECT_KNOWTHYSELF_DIR}:/home/node/workspace/.knowthyself:ro")
 if [ -f "$HOME/.gitconfig" ]; then DOCKER_RUN_OPTS+=("-v" "$HOME/.gitconfig:/home/node/.gitconfig:ro"); fi
 
 # Add port mappings if provided
@@ -358,10 +430,10 @@ else
     DOCKER_CMD_OVERRIDE+=("claude")
 fi
 
-if ! $ENTER_MODE && [ -s "$PROMPT_TEMPLATE_PATH_TO_USE" ]; then
+if ! $ENTER_MODE && ([ -n "$PROMPT_OVERRIDE_CONTENT" ] || [ -s "$PROMPT_TEMPLATE_PATH_TO_USE" ]); then
     DOCKER_CMD_OVERRIDE+=("-p" "$FULL_PROMPT_FOR_CLAUDE")
 elif ! $ENTER_MODE; then
-    log "Warning: Prompt file is empty. Claude will run without a system prompt."
+    log "Warning: No prompt available. Claude will run without a system prompt."
 fi
 
 if ! $ENTER_MODE; then
@@ -396,6 +468,9 @@ log "Final Docker CMD override: ${DOCKER_CMD_OVERRIDE[*]}"
 # ... (execute_docker function remains the same as previous "unified prompt" version) ...
 execute_docker() {
     local LOG_FILE_PATH="${PROJECT_JBSAYS_LOGS_DIR}/claude_run_$(date +%Y%m%d_%H%M%S).log"
+    
+    # Create .knowthyself context before running Docker
+    create_knowthyself_context
     
     log "Project dir (host): ${PROJECT_DIR_HOST_ABS}"
     if ! $ENTER_MODE; then
@@ -433,8 +508,12 @@ execute_docker() {
                 # Regenerate random seed for next conversation in case we hit MAX_TURNS
                 export RANDOM_ROLE_SEED_VAR=$(awk 'BEGIN{srand(); printf "%.3f\n", rand()}')
                 log "Generated new Random Role Seed for next conversation: ${RANDOM_ROLE_SEED_VAR}"
-                # Regenerate prompt with the new random seed
-                FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+                # Regenerate prompt with the new random seed (unless using override)
+                if [ -n "$PROMPT_OVERRIDE_CONTENT" ]; then
+                    FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
+                else
+                    FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+                fi
                 
                 # Update DOCKER_CMD_OVERRIDE with the new prompt
                 if [[ "${DOCKER_CMD_OVERRIDE[*]}" =~ "-p" ]]; then
@@ -502,12 +581,17 @@ if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
         log "Selected Focus Area for this iteration: ${FOCUS_AREA_VAR}"
         log "Generated Random Role Seed: ${RANDOM_ROLE_SEED_VAR}"
 
-        FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+        # Use prompt override if provided, otherwise use template with variable substitution
+        if [ -n "$PROMPT_OVERRIDE_CONTENT" ]; then
+            FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
+        else
+            FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+        fi
         
         # Reconstruct DOCKER_CMD_OVERRIDE for agent iteration
         DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions") # Agent mode always needs this
         # Add prompt for agent mode (never enter mode in iterations)
-        if [ -s "$PROMPT_TEMPLATE_PATH_TO_USE" ]; then
+        if [ -n "$PROMPT_OVERRIDE_CONTENT" ] || [ -s "$PROMPT_TEMPLATE_PATH_TO_USE" ]; then
             DOCKER_CMD_OVERRIDE+=("-p" "$FULL_PROMPT_FOR_CLAUDE")
         fi
         DOCKER_CMD_OVERRIDE+=("--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS_VAR")
@@ -543,7 +627,12 @@ else
         fi
         log "Fallback: Selected Focus Area: ${FOCUS_AREA_VAR}, Role Seed: ${RANDOM_ROLE_SEED_VAR}"
 
-        FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+        # Use prompt override if provided, otherwise use template with variable substitution  
+        if [ -n "$PROMPT_OVERRIDE_CONTENT" ]; then
+            FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
+        else
+            FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+        fi
 
         if $ENTER_BYPASS_MODE || $INIT_MODE; then
             DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions")
@@ -575,7 +664,12 @@ if $INIT_MODE; then
     fi
     log "Second Init: Selected Focus Area: ${FOCUS_AREA_VAR}, Role Seed: ${RANDOM_ROLE_SEED_VAR}"
     
-    FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+    # Use prompt override if provided, otherwise use template with variable substitution
+    if [ -n "$PROMPT_OVERRIDE_CONTENT" ]; then
+        FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
+    else
+        FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+    fi
     
     if $ENTER_BYPASS_MODE || $INIT_MODE; then
         DOCKER_CMD_OVERRIDE=("claude" "--dangerously-skip-permissions")

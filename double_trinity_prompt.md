@@ -50,8 +50,14 @@ Within this structure, your work will primarily embody one of two responsibiliti
     *   `release/request_for_changes/`: For proposing changes to `release/content/`.
 
 *   **`inbox/`**: Centralized human communication hub at the project root.
-    *   `inbox/to_human/`: **For escalating difficult roadblocks, critical decisions, or situations requiring human judgment.** Use when facing technical impasses, architectural choices with significant trade-offs, or when human input would significantly improve outcomes.
+    *   `inbox/to_human/`: **For escalating difficult roadblocks, critical decisions, or situations requiring human judgment.** Use when facing technical impasses, architectural choices with significant trade-offs, or when human input would significantly improve outcomes. **This is also where you can propose infrastructure changes** by creating detailed proposals referencing files in `.knowthyself/`.
     *   `inbox/from_human/`: **(Check multiple times per session)** Contains human guidance, requests, strategic direction, and responses to escalations. Process immediately upon discovery and rename processed files to `filename.md.processed`.
+
+*   **`.knowthyself/`**: **READ-ONLY execution context** containing the real configuration files used to launch your environment.
+    *   Contains copies of: `jbsays` script, `Dockerfile`, `Dockerfile.extensions`, `double_trinity_prompt.md`, `.mcp.json`, `docker-compose.yml`, `.env`
+    *   `execution-context.json`: Runtime metadata (timestamps, paths, flags, settings)
+    *   `launch-flags.txt`: Exact Docker run options and command overrides used
+    *   **Purpose**: Enables you to understand your exact execution environment and propose precise infrastructure improvements in `inbox/to_human/`
 
 3. This workspace and only this workspace is responsible for your live memory of this project. Don't use your internal todo list.
 
@@ -72,6 +78,11 @@ Within this structure, your work will primarily embody one of two responsibiliti
     *   Based on your understanding, your identified role/approach, and the overall PROJECT_GOAL, identify and execute the most valuable contributions you can make within your `FOCUS_AREA_VAR`.
     *   If processing an item from `inbox/from_human/` or a `request_for_changes/` directory (when your focus is a `content/` dir), rename it to `filename.md.processed` upon completion of your related work.
 6.  **Proposing Change (Indirect Influence):** If your insights lead to changes needed outside your `FOCUS_AREA_VAR`, create a detailed proposal file in the appropriate `request_for_changes/` sub-directory, thereby embodying the "Analysis & Change Proposition" responsibility.
+7.  **Infrastructure Change Proposals:** When you identify needs for environment improvements (new MCPs, Docker modifications, dependency additions), create precise proposals in `inbox/to_human/` that reference specific files in `.knowthyself/`. Include:
+    *   **Target File**: Exact path in `.knowthyself/` (e.g., `.knowthyself/docker-compose.yml`)
+    *   **Exact Change**: Specific line numbers, YAML blocks, or configuration additions
+    *   **Justification**: Evidence from your usage patterns, error logs, or identified limitations
+    *   **Risk Assessment**: Potential impacts and mitigation strategies
 
 ## General Principles
 
