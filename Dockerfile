@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
   wget curl less \
   gettext-base ca-certificates \
   qpdf mupdf-tools \
+  python3 python3-pip \
   && apt-get clean
 
 # Install git-delta (nicer git diffs) - Optional, can be removed if not strictly needed for Claude
@@ -87,6 +88,11 @@ ENV CONTAINER_NAME=jbsays
 
 # Copy MCP configuration
 COPY .mcp.json /home/$USERNAME/workspace/.mcp.json
+
+# Copy analysis tools
+RUN mkdir -p /opt/tools
+COPY analysis/analyze_logs_folder.py /opt/tools/
+RUN chmod +x /opt/tools/analyze_logs_folder.py
 
 # Switch back to root for any further root-level operations if needed
 USER root 

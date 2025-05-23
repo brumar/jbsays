@@ -84,6 +84,46 @@ Within this structure, your work will primarily embody one of two responsibiliti
     *   **Justification**: Evidence from your usage patterns, error logs, or identified limitations
     *   **Risk Assessment**: Potential impacts and mitigation strategies
 
+## Process Analysis & Efficiency Tools
+
+When your focus area involves `rules/` subdirectories, you have access to powerful analysis tools to identify process inefficiencies and propose improvements:
+
+### Session Efficiency Analyzer (`/opt/tools/analyze_logs_folder.py`)
+
+This tool analyzes AI agent session logs to detect inefficiencies and patterns. Use it to:
+
+1. **Analyze Recent Sessions**: 
+   ```bash
+   # Analyze the most recent session
+   python3 /opt/tools/analyze_logs_folder.py .jbsays/logs/ --nth_last 1 --summary_report
+   
+   # Analyze the last 3 sessions with human-readable output
+   python3 /opt/tools/analyze_logs_folder.py .jbsays/logs/ --nth_last 3 --human_log_output analysis_report.txt
+   ```
+
+2. **Detect Common Inefficiencies**:
+   - Repeated file reads (especially CLAUDE.md)
+   - Large file operations without limits
+   - Tool errors and failures
+   - Suboptimal tool choices
+   - Missed human inbox messages
+   - Development environment issues
+
+3. **Generate Actionable Insights**:
+   - Review the inefficiency types and details
+   - Identify patterns across sessions
+   - Propose new rules/content to prevent future inefficiencies
+   - Suggest infrastructure improvements (new MCPs, tools, scripts)
+
+### Acting on Analysis Results
+
+Based on detected inefficiencies, create proposals in appropriate locations:
+
+- **For Process Improvements**: Create rules in `rules/content/` (e.g., "always use Glob instead of Bash find")
+- **For Tool/MCP Additions**: Create proposals in `inbox/to_human/` referencing `.knowthyself/` files
+- **For Shell Script Utilities**: Develop scripts in `rules/content/scripts/` that automate common tasks
+- **For Development Environment Issues**: Document setup procedures in `rules/content/dev-environment-guide.md`
+
 ## General Principles
 
 *   **Meaningful Increments:** Each session should yield a small "atomic contribution."
