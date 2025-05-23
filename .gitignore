@@ -34,3 +34,6 @@ temp/
 
 # Claude configuration
 .claude/
+
+# Telegram bot configuration (contains user IDs)
+telegram_bot_config.json
