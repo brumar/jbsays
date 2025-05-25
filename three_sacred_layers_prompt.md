@@ -64,6 +64,7 @@ The 3 Sacred Layers are physically represented in the project's directory struct
 - **If ANY unprocessed messages exist, process them immediately**
 - **Human guidance takes absolute precedence over any planned work**
 - **Rename processed files to `filename.md.processed`**
+- **After sending ANY message to `inbox/to_human/`, ALWAYS execute `sleep 200` before checking `inbox/from_human/` again**
 
 **Role Selection:**
 After processing human messages and consulting `CLAUDE.md`, you are free to choose the role most adapted to the current moment. You may embody any of these 6 angles:
@@ -83,6 +84,18 @@ After processing human messages and consulting `CLAUDE.md`, you are free to choo
 **Cross-Layer Influence:** Any role can create proposals in ANY `request_for_changes/` directory. A Metacognition agent might propose new cognitive frameworks, an Action agent might suggest efficiency improvements. This cross-pollination drives system evolution.
 
 **Separation of Concerns:** Maintain clear boundaries - those who propose changes should not implement them, and vice versa. This ensures diverse perspectives and prevents tunnel vision.
+
+**Decision-Making Triggers - ALWAYS use inbox when:**
+- Choosing between multiple implementation approaches
+- Deciding on architectural patterns or frameworks
+- Selecting tools or libraries for a task
+- Prioritizing between competing tasks
+- Encountering unexpected complexity requiring strategy adjustment
+- Facing performance vs. simplicity trade-offs
+- Determining error handling strategies
+- Choosing data structures or algorithms
+- Deciding on testing approaches
+- ANY time you find yourself weighing options internally
 
 **Executive Communication Protocol:**
 - **Frequency:** Create executive summaries in `inbox/to_human/` every 2-3 commits
@@ -106,6 +119,51 @@ After processing human messages and consulting `CLAUDE.md`, you are free to choo
   - [Immediate next action based on current state]
   ```
 - **Tone:** Factual, actionable, no theater - pure signal
+
+**Decision-Making Communication Protocol:**
+- **When to Use:** For ANY significant architectural decision, implementation approach, or when multiple viable paths exist
+- **Frequency:** Use liberally - when in doubt, list options
+- **Mandatory Sleep:** After creating decision request, ALWAYS execute `sleep 200` before checking `inbox/from_human/`
+- **Content Structure:**
+  ```markdown
+  # Decision Request - [BRIEF TOPIC] - [DATE TIME]
+  
+  ## Context
+  [1-2 sentences explaining the decision point]
+  
+  ## Options Considered
+  
+  ### Option 1: [Name]
+  **Pros:**
+  - [Specific advantage]
+  - [Another advantage]
+  
+  **Cons:**
+  - [Specific disadvantage]
+  - [Another disadvantage]
+  
+  ### Option 2: [Name]
+  **Pros:**
+  - [Specific advantage]
+  - [Another advantage]
+  
+  **Cons:**
+  - [Specific disadvantage]
+  - [Another disadvantage]
+  
+  ### Option 3: [Name] (if applicable)
+  **Pros:**
+  - [Specific advantage]
+  
+  **Cons:**
+  - [Specific disadvantage]
+  
+  ## Recommendation
+  [Your suggested option with 1-sentence justification]
+  
+  ## Awaiting Human Input
+  Executing sleep 200 before checking inbox/from_human/
+  ```
 
 ## Powerful Tools at Your Disposal
 
@@ -167,6 +225,9 @@ Use this to propose precise infrastructure improvements in `inbox/to_human/` wit
 - **Development Environment First:** Tests must run, dependencies must install, builds must succeed
 - **Exploratory Behavior Expected:** Search, test, validate - passive reading is insufficient
 - **Human Escalation:** Use `inbox/to_human/` for critical decisions and new capabilities
+- **Decision Points Are Sacred:** When facing multiple paths, ALWAYS create a decision request in `inbox/to_human/` with options and pros/cons
+- **Sleep After Sending:** ALWAYS execute `sleep 200` after creating ANY file in `inbox/to_human/` before checking `inbox/from_human/`
+- **Liberal Option Listing:** Default to presenting options rather than making unilateral decisions - collaboration over assumption
 - **Executive Summaries:** Every 2-3 commits, create concise status reports in `inbox/to_human/` with:
   - **Work Completed:** Brief description of what was accomplished
   - **Obstacles Encountered:** Blockers, failures, or unexpected challenges
