@@ -415,6 +415,7 @@ DOCKER_RUN_OPTS+=("-v" "${PROJECT_DIR_HOST_ABS}:/home/node/workspace")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_DIR}:/home/node/.claude")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_JBSAYS_CONFIG_FILE}:/home/node/.claude.json")
 DOCKER_RUN_OPTS+=("-v" "${PROJECT_KNOWTHYSELF_DIR}:/home/node/workspace/.knowthyself:ro")
+DOCKER_RUN_OPTS+=("-v" "${SCRIPT_DIR}/internal_tools:/opt/tools:ro")
 if [ -f "$HOME/.gitconfig" ]; then DOCKER_RUN_OPTS+=("-v" "$HOME/.gitconfig:/home/node/.gitconfig:ro"); fi
 
 # Add port mappings if provided

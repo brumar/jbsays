@@ -90,10 +90,9 @@ ENV CONTAINER_NAME=jbsays
 # Copy MCP configuration
 COPY .mcp.json /home/$USERNAME/workspace/.mcp.json
 
-# Copy analysis tools
-RUN mkdir -p /home/$USERNAME/self_analysis_tools
-COPY --chown=$USERNAME:$USERNAME analysis/analyze_logs_folder.py /home/$USERNAME/self_analysis_tools/
-RUN chmod +x /home/$USERNAME/self_analysis_tools/analyze_logs_folder.py
+# Copy analysis tools - Note: These will be mounted from host at runtime via volume
+# Creating directory structure for consistency
+RUN mkdir -p /opt/tools
 
 # Switch back to root for any further root-level operations if needed
 USER root 
