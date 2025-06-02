@@ -5,7 +5,7 @@
       "--network", "playwright-mcp-docker_default",
       "--mcp-config", ".mcp.json",
       "--allowedTools", "mcp__playwright__*",
-      "--magicprompt", "./three_sacred_layers_prompt.md"
+      "--magicprompt", "./systemprompts/three_sacred_layers_prompt.md"
     ]
   },
   "projects": {
@@ -22,7 +22,7 @@
         "--iterations", "20",
         "--container-name", "jbsays_example",
         "--max-turns-by-iteration", "15",
-        "--magicprompt", "./three_sacred_layers_prompt.md"
+        "--magicprompt", "./systemprompts/three_sacred_layers_prompt.md"
       ]
     },
     "web_app_project": {
@@ -38,7 +38,7 @@
         "--iterations", "30",
         "--container-name", "jbsays_webapp",
         "--max-turns-by-iteration", "25",
-        "--magicprompt", "./three_sacred_layers_prompt.md"
+        "--magicprompt", "./systemprompts/three_sacred_layers_prompt.md"
       ]
     },
     "library_project": {
@@ -54,7 +54,7 @@
         "--iterations", "25",
         "--container-name", "jbsays_lib",
         "--max-turns-by-iteration", "20",
-        "--magicprompt", "./three_sacred_layers_prompt.md"
+        "--magicprompt", "./systemprompts/three_sacred_layers_prompt.md"
       ]
     }
   }

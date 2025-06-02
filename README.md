@@ -80,7 +80,7 @@ docker build -t jbsays:latest .
 
 ### Optional Arguments
 
-- `--magicprompt <path>`: Path to a custom prompt.md template (defaults to default_prompt.md)
+- `--magicprompt <path>`: Path to a custom prompt.md template (defaults to systemprompts/default_prompt.md)
 - `--project-vision <string_or_path>`: Project vision information as string or path to a text file
 - `--max-turns-by-iteration <N>`: Maximum turns for Claude agent per iteration (default: 15, ignored in interactive mode)
 - `--enter`: Enter interactive mode with Claude

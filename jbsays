@@ -5,7 +5,7 @@ set -euo pipefail
 DOCKER_IMAGE_NAME="jbsays"
 DOCKER_IMAGE_TAG="fullstack"
 DOCKER_FULL_IMAGE="${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
-DEFAULT_PROMPT_FILENAME="double_trinity_prompt.md"
+DEFAULT_PROMPT_FILENAME="systemprompts/double_trinity_prompt.md"
 FALLBACK_TO_INTERACTIVE=true
 INIT_MODE=false
 NO_GIT=false
@@ -191,7 +191,7 @@ create_knowthyself_context() {
         "${SCRIPT_DIR}/jbsays"
         "${SCRIPT_DIR}/Dockerfile"
         "${SCRIPT_DIR}/Dockerfile.extensions"
-        "${SCRIPT_DIR}/double_trinity_prompt.md"
+        "${SCRIPT_DIR}/systemprompts/double_trinity_prompt.md"
         "${SCRIPT_DIR}/.mcp.json"
         "${SCRIPT_DIR}/extensions/docker-compose.yml"
         "${SCRIPT_DIR}/extensions/.env"
