@@ -1,0 +1,61 @@
+{
+  "version": "1.0",
+  "defaults": {
+    "args": [
+      "--network", "playwright-mcp-docker_default",
+      "--mcp-config", ".mcp.json",
+      "--allowedTools", "mcp__playwright__*",
+      "--magicprompt", "./three_sacred_layers_prompt.md"
+    ]
+  },
+  "projects": {
+    "example_project": {
+      "name": "Example Project",
+      "path": "/path/to/your/project",
+      "container_name": "jbsays_example",
+      "args": [
+        "--project-path", "/path/to/your/project",
+        "--network", "playwright-mcp-docker_default",
+        "--mcp-config", ".mcp.json",
+        "--project-vision", "Your project vision description here",
+        "--allowedTools", "mcp__playwright__*",
+        "--iterations", "20",
+        "--container-name", "jbsays_example",
+        "--max-turns-by-iteration", "15",
+        "--magicprompt", "./three_sacred_layers_prompt.md"
+      ]
+    },
+    "web_app_project": {
+      "name": "Web Application",
+      "path": "/path/to/web/app",
+      "container_name": "jbsays_webapp",
+      "args": [
+        "--project-path", "/path/to/web/app",
+        "--network", "playwright-mcp-docker_default",
+        "--mcp-config", ".mcp.json",
+        "--project-vision", "Build a modern web application with React/Vue/Angular and comprehensive testing",
+        "--allowedTools", "mcp__playwright__*",
+        "--iterations", "30",
+        "--container-name", "jbsays_webapp",
+        "--max-turns-by-iteration", "25",
+        "--magicprompt", "./three_sacred_layers_prompt.md"
+      ]
+    },
+    "library_project": {
+      "name": "JavaScript Library",
+      "path": "/path/to/library",
+      "container_name": "jbsays_lib",
+      "args": [
+        "--project-path", "/path/to/library",
+        "--network", "playwright-mcp-docker_default",
+        "--mcp-config", ".mcp.json",
+        "--project-vision", "Create a reusable JavaScript/TypeScript library with full test coverage and documentation",
+        "--allowedTools", "mcp__playwright__*",
+        "--iterations", "25",
+        "--container-name", "jbsays_lib",
+        "--max-turns-by-iteration", "20",
+        "--magicprompt", "./three_sacred_layers_prompt.md"
+      ]
+    }
+  }
+}

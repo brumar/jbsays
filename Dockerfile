@@ -7,9 +7,10 @@ ENV TZ="$TZ"
 
 RUN npm install -g @playwright/mcp@latest
 
-# Install Chrome browser and dependencies required by Playwright
-# Although the base image should include them, explicitly install in case MCP cannot find them
-RUN npx playwright install chrome && npx playwright install-deps chrome
+# Install Chrome, Chromium, and Firefox browsers with dependencies required by Playwright
+# Set the browsers path for consistent installation
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx playwright install --with-deps chrome chromium firefox
 
 # Install dev tools, CLI utilities, and tools for agent operation
 RUN apt-get update && apt-get install -y \

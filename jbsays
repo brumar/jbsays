@@ -47,13 +47,14 @@ add_mcp_flags() {
     fi
 }
 usage() {
-    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--prompt-override <text_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--force] [--no-git] [--content-at-root] [--mcp-config <mcp_config_file>] [--allowedTools <tool_pattern>] [--port <port_mapping>] [--network <network_name>] [--container-name <name>] [project_goal_string_or_path_or_-]"
+    echo "Usage: $0 --project-path <path_to_project_dir> [--magicprompt <path_to_prompt.md>] [--project-vision <string_or_path>] [--prompt-override <text_or_path>] [--prompt-append <text_or_path>] [--max-turns-by-iteration <N>] [--enter] [--verbose] [--iterations <N>] [--nofallback] [--init] [--show-final-prompt] [--force] [--no-git] [--content-at-root] [--mcp-config <mcp_config_file>] [--allowedTools <tool_pattern>] [--port <port_mapping>] [--network <network_name>] [--container-name <name>] [project_goal_string_or_path_or_-]"
     echo ""
     echo "Options:"
     echo "  --project-path <path>        Path to the project directory (required)"
     echo "  --magicprompt <file>         Custom prompt template file"
     echo "  --project-vision <text|file> Project vision/goal (text or file path)"
     echo "  --prompt-override <text|file> Override final prompt directly (text or file path)"
+    echo "  --prompt-append <text|file>  Append extra content to the prompt (text or file path)"
     echo "  --max-turns-by-iteration <N> Maximum turns per iteration for agent mode"
     echo "  --enter                      Enter interactive mode"
     echo "  --verbose                    Enable verbose output"
@@ -92,6 +93,7 @@ PROJECT_DIR_HOST=""
 CUSTOM_PROMPT_FILE_HOST=""
 PROJECT_GOAL_CONTENT=""
 PROMPT_OVERRIDE_CONTENT=""
+PROMPT_APPEND_CONTENT=""
 ENTER_MODE=false
 ENTER_BYPASS_MODE=false
 MAX_TURNS=40
@@ -118,6 +120,13 @@ while [[ $# -gt 0 ]]; do
                 PROMPT_OVERRIDE_CONTENT=$(cat "$2")
             else
                 PROMPT_OVERRIDE_CONTENT="$2"
+            fi
+            shift 2 ;;
+        --prompt-append)
+            if [ -f "$2" ]; then
+                PROMPT_APPEND_CONTENT=$(cat "$2")
+            else
+                PROMPT_APPEND_CONTENT="$2"
             fi
             shift 2 ;;
         --max-turns-by-iteration) MAX_TURNS="$2"; shift 2 ;;
@@ -375,6 +384,13 @@ if [ -n "$PROMPT_OVERRIDE_CONTENT" ]; then
     log "Using prompt override (bypassing template and variable substitution)"
 else
     FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+    # Append extra content if provided
+    if [ -n "$PROMPT_APPEND_CONTENT" ]; then
+        FULL_PROMPT_FOR_CLAUDE="${FULL_PROMPT_FOR_CLAUDE}
+
+${PROMPT_APPEND_CONTENT}"
+        log "Appended extra content to prompt"
+    fi
 fi
 
 if $SHOW_FINAL_PROMPT; then
@@ -456,7 +472,7 @@ if ! $ENTER_MODE; then
 
     DOCKER_CMD_OVERRIDE+=("--verbose")
     DOCKER_CMD_OVERRIDE+=("--output-format" "stream-json")
-    DOCKER_CMD_OVERRIDE+=("--max-turns" "$MAX_TURNS_VAR")
+    DOCKER_CMD_OVERRIDE+=("--max-turns" "$MAX_TURNS")
     
     # Add MCP flags if configured
     add_mcp_flags
@@ -513,6 +529,12 @@ execute_docker() {
                     FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
                 else
                     FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+                    # Append extra content if provided
+                    if [ -n "$PROMPT_APPEND_CONTENT" ]; then
+                        FULL_PROMPT_FOR_CLAUDE="${FULL_PROMPT_FOR_CLAUDE}
+
+${PROMPT_APPEND_CONTENT}"
+                    fi
                 fi
                 
                 # Update DOCKER_CMD_OVERRIDE with the new prompt
@@ -586,6 +608,12 @@ if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
             FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
         else
             FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+            # Append extra content if provided
+            if [ -n "$PROMPT_APPEND_CONTENT" ]; then
+                FULL_PROMPT_FOR_CLAUDE="${FULL_PROMPT_FOR_CLAUDE}
+
+${PROMPT_APPEND_CONTENT}"
+            fi
         fi
         
         # Reconstruct DOCKER_CMD_OVERRIDE for agent iteration
@@ -594,7 +622,7 @@ if [ "$ITERATIONS" -gt 1 ] || [ "$ITERATIONS" -eq 0 ]; then
         if [ -n "$PROMPT_OVERRIDE_CONTENT" ] || [ -s "$PROMPT_TEMPLATE_PATH_TO_USE" ]; then
             DOCKER_CMD_OVERRIDE+=("-p" "$FULL_PROMPT_FOR_CLAUDE")
         fi
-        DOCKER_CMD_OVERRIDE+=("--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS_VAR")
+        DOCKER_CMD_OVERRIDE+=("--verbose" "--output-format" "stream-json" "--max-turns" "$MAX_TURNS")
         
         # Add MCP flags if configured
         add_mcp_flags
@@ -632,6 +660,12 @@ else
             FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
         else
             FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+            # Append extra content if provided
+            if [ -n "$PROMPT_APPEND_CONTENT" ]; then
+                FULL_PROMPT_FOR_CLAUDE="${FULL_PROMPT_FOR_CLAUDE}
+
+${PROMPT_APPEND_CONTENT}"
+            fi
         fi
 
         if $ENTER_BYPASS_MODE || $INIT_MODE; then
@@ -669,6 +703,12 @@ if $INIT_MODE; then
         FULL_PROMPT_FOR_CLAUDE="$PROMPT_OVERRIDE_CONTENT"
     else
         FULL_PROMPT_FOR_CLAUDE=$(envsubst < "$PROMPT_TEMPLATE_PATH_TO_USE")
+        # Append extra content if provided
+        if [ -n "$PROMPT_APPEND_CONTENT" ]; then
+            FULL_PROMPT_FOR_CLAUDE="${FULL_PROMPT_FOR_CLAUDE}
+
+${PROMPT_APPEND_CONTENT}"
+        fi
     fi
     
     if $ENTER_BYPASS_MODE || $INIT_MODE; then

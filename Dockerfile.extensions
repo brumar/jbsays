@@ -62,8 +62,52 @@ WORKDIR /home/node/workspace
 FROM ${BASE_IMAGE} as fullstack
 USER root
 RUN apt-get update && apt-get install -y \
-    python3.11 python3.11-venv\
+    python3.11 python3.11-venv python3.11-dev \
     && apt-get clean
+
+# PDF and graphics dependencies
+RUN apt-get update && apt-get install -y \
+    # PDF tools
+    qpdf \
+    poppler-utils \
+    ghostscript \
+    imagemagick \
+    pdftk \
+    # Build tools
+    build-essential \
+    cmake \
+    ninja-build \
+    python3-dev \
+    pkg-config \
+    # Graphics libraries
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    libpixman-1-dev \
+    # Browser and display
+    google-chrome-stable \
+    xvfb \
+    # Analysis tools
+    libimage-exiftool-perl \
+    tesseract-ocr \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Fix ImageMagick PDF policy
+RUN if [ -f /etc/ImageMagick-6/policy.xml ]; then \
+        cp /etc/ImageMagick-6/policy.xml /etc/ImageMagick-6/policy.xml.backup && \
+        sed -i '/<policy domain="coder" rights="none" pattern="PDF" \/>/d' /etc/ImageMagick-6/policy.xml && \
+        sed -i '/<policy domain="coder" rights="none" pattern="PS" \/>/d' /etc/ImageMagick-6/policy.xml && \
+        sed -i '/<policy domain="coder" rights="none" pattern="EPS" \/>/d' /etc/ImageMagick-6/policy.xml; \
+    fi
+
+# Install global Node packages as root
+RUN npm install -g \
+    pdf-parse \
+    canvas \
+    sharp \
+    puppeteer-core
 
 USER node
 RUN npm install -g \
@@ -74,6 +118,26 @@ RUN npm install -g \
     eslint \
     vite \
     jest
+
+# Create and use Python virtual environment
+RUN python3 -m venv /home/node/.venv
+ENV PATH="/home/node/.venv/bin:$PATH"
+
+# Install Python packages in virtual environment
+RUN pip install --upgrade pip && \
+    pip install \
+    pypdf2 \
+    pdfplumber \
+    pdf2image \
+    pillow \
+    camelot-py[cv]
+
+# Set all environment variables
+ENV CHROME_BIN=/usr/bin/google-chrome
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV MAGICK_CONFIGURE_PATH=/etc/ImageMagick-6
 
 WORKDIR /home/node/workspace
 

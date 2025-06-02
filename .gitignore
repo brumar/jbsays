@@ -37,3 +37,29 @@ temp/
 
 # Telegram bot configuration (contains user IDs)
 telegram_bot_config.json
+
+# Project configuration (contains user-specific paths)
+projects.json
+
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Recovery and analysis artifacts
+recovery_report.txt
+recovered_backup/
+recovered_files/
+
+# Edit history and logs
+edit_history/
+old_logs/
+pfruntimelogs/
+*.jsonl
+
+# Temporary analysis files
+analysis/
