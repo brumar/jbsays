@@ -1,0 +1,3 @@
+# Telegram Multi-Project Inbox Bot Requirements
+python-telegram-bot>=20.0
+watchdog>=3.0.0
